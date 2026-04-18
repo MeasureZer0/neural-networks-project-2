@@ -54,7 +54,7 @@ class LandcoverDataset(Dataset):
         return result
     
 BASE_DIR = Path(__file__).parent.resolve()
-DATA_DIR = (BASE_DIR / "landcover.ai.v1").resolve()
+DATA_DIR = (BASE_DIR / ".." / "data" / "landcover.ai.v1").resolve()
     
 if __name__ == '__main__':
 

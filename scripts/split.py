@@ -4,18 +4,26 @@ This script was originally written by the authors of the LandCover.ai dataset.
 Original source:
 https://landcover.ai.linuxpolska.com/
 
+modifications:
+- changed paths to directories
+
 """
 
 #!/usr/bin/env python3
+
+from pathlib import Path
 
 import glob
 import os
 
 import cv2
 
-IMGS_DIR = "./images"
-MASKS_DIR = "./masks"
-OUTPUT_DIR = "./output"
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / ".." / "data" / "landcover.ai.v1"
+
+IMGS_DIR = DATA_DIR / "images"
+MASKS_DIR = DATA_DIR / "masks"
+OUTPUT_DIR = DATA_DIR / "output"
 
 TARGET_SIZE = 512
 
