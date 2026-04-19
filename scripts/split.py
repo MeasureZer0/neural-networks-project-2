@@ -40,6 +40,12 @@ for i, (img_path, mask_path) in enumerate(zip(img_paths, mask_paths, strict=Fals
     img = cv2.imread(img_path)
     mask = cv2.imread(mask_path)
 
+    if img is None:
+        raise ValueError(f"Image could not be loaded: {img_path}")
+
+    if mask is None:
+        raise ValueError(f"Mask could not be loaded: {mask_path}")
+
     assert img_filename == mask_filename and img.shape[:2] == mask.shape[:2]
 
     k = 0
