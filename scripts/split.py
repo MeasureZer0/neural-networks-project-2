@@ -15,7 +15,8 @@ import glob
 import os
 from pathlib import Path
 
-import cv2
+# Added as dependency but pyright throws an error
+import cv2  # type: ignore
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / ".." / "data" / "landcover.ai.v1"
@@ -44,14 +45,18 @@ for i, (img_path, mask_path) in enumerate(zip(img_paths, mask_paths, strict=Fals
     k = 0
     for y in range(0, img.shape[0], TARGET_SIZE):
         for x in range(0, img.shape[1], TARGET_SIZE):
-            img_tile = img[y:y + TARGET_SIZE, x:x + TARGET_SIZE]
-            mask_tile = mask[y:y + TARGET_SIZE, x:x + TARGET_SIZE]
+            img_tile = img[y : y + TARGET_SIZE, x : x + TARGET_SIZE]
+            mask_tile = mask[y : y + TARGET_SIZE, x : x + TARGET_SIZE]
 
             if img_tile.shape[0] == TARGET_SIZE and img_tile.shape[1] == TARGET_SIZE:
-                out_img_path = os.path.join(OUTPUT_DIR, "{}_{}.jpg".format(img_filename, k))
+                out_img_path = os.path.join(
+                    OUTPUT_DIR, "{}_{}.jpg".format(img_filename, k)
+                )
                 cv2.imwrite(out_img_path, img_tile)
 
-                out_mask_path = os.path.join(OUTPUT_DIR, "{}_{}_m.png".format(mask_filename, k))
+                out_mask_path = os.path.join(
+                    OUTPUT_DIR, "{}_{}_m.png".format(mask_filename, k)
+                )
                 cv2.imwrite(out_mask_path, mask_tile)
 
             k += 1
