@@ -9,13 +9,18 @@ PairTransform = Callable[
     [torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]
 ]
 
+_MEAN = [0.485, 0.456, 0.406]
+_STD = [0.229, 0.224, 0.225]
+
 
 class _RandomResizedCrop:
     def __init__(self, size: int, scale: tuple[float, float]) -> None:
         self.size = size
         self.scale = scale
 
-    def __call__(self, image: torch.Tensor, mask: torch.Tensor):
+    def __call__(
+        self, image: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         i, j, h, w = RandomResizedCrop.get_params(
             image, scale=list(self.scale), ratio=[1.0, 1.0]
         )
@@ -37,7 +42,9 @@ class _Flips:
         self.hflip_p = hflip_p
         self.vflip_p = vflip_p
 
-    def __call__(self, image: torch.Tensor, mask: torch.Tensor):
+    def __call__(
+        self, image: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         if random.random() < self.hflip_p:
             image, mask = F.hflip(image), F.hflip(mask)
         if random.random() < self.vflip_p:
@@ -49,11 +56,13 @@ class _Rotate90:
     def __init__(self, p: float) -> None:
         self.p = p
 
-    def __call__(self, image: torch.Tensor, mask: torch.Tensor):
+    def __call__(
+        self, image: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         if random.random() < self.p:
             k = random.choice([1, 2, 3])
             image = torch.rot90(image, k, dims=[1, 2])
-            mask = torch.rot90(mask, k, dims=[1, 2])
+            mask = torch.rot90(mask, k, dims=[0, 1])
         return image, mask
 
 
@@ -61,7 +70,9 @@ class _ColorJitter:
     def __init__(self, params: tuple[float, float, float, float]) -> None:
         self.cj = ColorJitter(*params)
 
-    def __call__(self, image: torch.Tensor, mask: torch.Tensor):
+    def __call__(
+        self, image: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         return self.cj(image), mask
 
 
@@ -69,7 +80,9 @@ class _Resize:
     def __init__(self, size: int) -> None:
         self.size = size
 
-    def __call__(self, image: torch.Tensor, mask: torch.Tensor):
+    def __call__(
+        self, image: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         image = Resize((self.size, self.size))(image)
         mask = Resize(
             (self.size, self.size), interpolation=F.InterpolationMode.NEAREST
@@ -78,9 +91,13 @@ class _Resize:
 
 
 class _Normalize:
-    def __call__(self, image: torch.Tensor, mask: torch.Tensor):
-        norm = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        return norm(image), mask
+    def __init__(self) -> None:
+        self.norm = Normalize(mean=_MEAN, std=_STD)
+
+    def __call__(
+        self, image: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.norm(image), mask
 
 
 class TrainTransform:
@@ -128,10 +145,7 @@ class TrainTransform:
 class ValTransform:
     def __init__(self, size: int = 512) -> None:
         self.size = size
-        self.norm = Normalize(
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225],
-        )
+        self.norm = Normalize(mean=_MEAN, std=_STD)
 
     def __call__(
         self, image: torch.Tensor, mask: torch.Tensor
