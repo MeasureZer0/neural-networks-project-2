@@ -12,7 +12,7 @@ class LandcoverDataset(Dataset):
         image_dir: Path,
         split_file: Path,
         transform: Optional[Callable] = None,
-        return_meta: bool = False
+        return_meta: bool = False,
     ) -> None:
 
         self.image_dir = image_dir
@@ -41,7 +41,7 @@ class LandcoverDataset(Dataset):
         mask = mask.long()
 
         if self.transform is not None:
-            image, mask = self.transform(image)
+            image, mask = self.transform(image, mask)
 
         result = {
             "image": image,
@@ -52,17 +52,14 @@ class LandcoverDataset(Dataset):
             result["path"] = str(image_path)
 
         return result
-    
+
+
 BASE_DIR = Path(__file__).parent.resolve()
 DATA_DIR = (BASE_DIR / ".." / "data" / "landcover.ai.v1").resolve()
-    
-if __name__ == '__main__':
 
+if __name__ == "__main__":
     dataset = LandcoverDataset(
-        image_dir= DATA_DIR / "output",
-        split_file= DATA_DIR / "val.txt",
-        transform= None
+        image_dir=DATA_DIR / "output", split_file=DATA_DIR / "val.txt", transform=None
     )
 
     dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
-
