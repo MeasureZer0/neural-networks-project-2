@@ -1,9 +1,9 @@
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
-from torch import Tensor
-from torch.utils.data import Dataset, DataLoader
 import torchvision.io as io
+from torch import Tensor
+from torch.utils.data import DataLoader, Dataset
 
 
 class LandcoverDataset(Dataset):
