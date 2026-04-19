@@ -36,12 +36,16 @@ class LandcoverDataset(Dataset):
         mask = io.read_image(str(mask_path))
 
         if mask.shape[0] > 1:
-            mask = mask[0]
+            mask = mask[0:1]
+        else:
+            mask = mask
 
         mask = mask.long()
 
         if self.transform is not None:
             image, mask = self.transform(image, mask)
+
+        mask = mask.squeeze(0)
 
         result = {
             "image": image,
