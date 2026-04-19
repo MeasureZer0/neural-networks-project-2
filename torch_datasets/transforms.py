@@ -20,8 +20,10 @@ class TrainTransform:
     def __init__(
         self,
         size: int = 512,
-        crop_scale: tuple[float, float] | None = (0.5, 1.0),
+        crop_scale: tuple[float, float] | None = (0.7, 1.0),
         hflip_p: float | None = 0.5,
+        vflip_p: float | None = 0.5,
+        rotate90_p: float | None = 0.5,
         jitter_params: tuple[float, float, float, float] | None = (
             0.4,
             0.4,
@@ -33,20 +35,25 @@ class TrainTransform:
         self.transforms_list: list[PairTransform] = []
 
         self.normalize = Normalize(
-            mean=[0.47087333, 0.44731208, 0.40772682],
-            std=[0.2517867, 0.2472999, 0.25216556],
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
         )
 
         if crop_scale is not None:
             self.transforms_list.append(self._random_resized_crop(crop_scale))
 
-        if hflip_p is not None:
-            self.transforms_list.append(self._horizontal_flip(hflip_p))
+        if hflip_p is not None or vflip_p is not None:
+            self.transforms_list.append(self._flips(hflip_p or 0.0, vflip_p or 0.0))
+
+        if rotate90_p is not None:
+            self.transforms_list.append(self._rotate90(rotate90_p))
 
         if jitter_params is not None:
             self.transforms_list.append(self._color_jitter(jitter_params))
 
-        self.transforms_list.append(self._final_resize())
+        if crop_scale is None:
+            self.transforms_list.append(self._resize())
+
         self.transforms_list.append(self._normalize())
 
     def _random_resized_crop(self, crop_scale: tuple[float, float]) -> PairTransform:
@@ -72,13 +79,28 @@ class TrainTransform:
 
         return transform
 
-    def _horizontal_flip(self, p: float) -> PairTransform:
+    def _flips(self, hflip_p: float, vflip_p: float) -> PairTransform:
+        def transform(
+            image: torch.Tensor, mask: torch.Tensor
+        ) -> tuple[torch.Tensor, torch.Tensor]:
+            if random.random() < hflip_p:
+                image = F.hflip(image)
+                mask = F.hflip(mask)
+            if random.random() < vflip_p:
+                image = F.vflip(image)
+                mask = F.vflip(mask)
+            return image, mask
+
+        return transform
+
+    def _rotate90(self, p: float) -> PairTransform:
         def transform(
             image: torch.Tensor, mask: torch.Tensor
         ) -> tuple[torch.Tensor, torch.Tensor]:
             if random.random() < p:
-                image = F.hflip(image)
-                mask = F.hflip(mask)
+                k = random.choice([1, 2, 3])  # 90, 180, 270 degrees
+                image = torch.rot90(image, k, dims=[1, 2])
+                mask = torch.rot90(mask, k, dims=[0, 1])
             return image, mask
 
         return transform
@@ -93,7 +115,7 @@ class TrainTransform:
 
         return transform
 
-    def _final_resize(self) -> PairTransform:
+    def _resize(self) -> PairTransform:
         size = self.size
 
         def transform(
@@ -124,31 +146,19 @@ class TrainTransform:
 
 
 class ValTransform:
-    def __init__(self, size: int = 512, use_ccrop: bool = False) -> None:
+    def __init__(self, size: int = 512) -> None:
         self.size = size
-        self.use_ccrop = use_ccrop
-
         self.normalize = Normalize(
-            mean=[0.47087333, 0.44731208, 0.40772682],
-            std=[0.2517867, 0.2472999, 0.25216556],
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225],
         )
 
     def __call__(
         self, image: torch.Tensor, mask: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        if self.use_ccrop:
-            image = Resize(self.size + 32)(image)
-            mask = Resize(self.size + 32, interpolation=F.InterpolationMode.NEAREST)(
-                mask
-            )
-            image = F.center_crop(image, [self.size, self.size])
-            mask = F.center_crop(mask, [self.size, self.size])
-        else:
-            image = Resize((self.size, self.size))(image)
-            mask = Resize(
-                (self.size, self.size), interpolation=F.InterpolationMode.NEAREST
-            )(mask)
-
+        image = Resize((self.size, self.size))(image)
+        mask = Resize(
+            (self.size, self.size), interpolation=F.InterpolationMode.NEAREST
+        )(mask)
         image = self.normalize(image)
-
         return image, mask
