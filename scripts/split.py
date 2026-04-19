@@ -33,7 +33,7 @@ mask_paths = glob.glob(os.path.join(MASKS_DIR, "*.tif"))
 img_paths.sort()
 mask_paths.sort()
 
-os.makedirs(OUTPUT_DIR)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 for i, (img_path, mask_path) in enumerate(zip(img_paths, mask_paths, strict=False)):
     img_filename = os.path.splitext(os.path.basename(img_path))[0]
     mask_filename = os.path.splitext(os.path.basename(mask_path))[0]
