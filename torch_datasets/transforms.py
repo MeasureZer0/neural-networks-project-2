@@ -2,8 +2,8 @@ import albumentations as A
 import torch
 from albumentations.pytorch import ToTensorV2
 
-_MEAN = (0.37451365, 0.40184889, 0.35060243)
-_STD = (0.1159367, 0.09916778, 0.08508567)
+_MEAN = (0.3651488, 0.39352093, 0.3404547)
+_STD = (0.10747509, 0.09497052, 0.07975048)
 
 
 class TrainTransform:
