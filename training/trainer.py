@@ -1,4 +1,3 @@
-# pyright: reportPrivateImportUsage=false
 import os
 from typing import Optional
 
@@ -11,7 +10,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from training.checkpointing import save_checkpoint
-from training.configs.baseline_config import Config
+from training.configs.baseline import Config
 
 
 class Trainer:
@@ -36,15 +35,24 @@ class Trainer:
         self.precision = getattr(config, "precision", "fp32")
 
         precision_map = {
-            "fp32": torch.float32,
-            "fp16": torch.float16,
-            "bf16": torch.bfloat16,
+            "fp32": torch.float32,  # type: ignore[assignment]
+            "fp16": torch.float16,  # type: ignore[assignment]
+            "bf16": torch.bfloat16,  # type: ignore[assignment]
         }
 
-        self.dtype = precision_map.get(self.precision, torch.float32)
+        self.dtype = precision_map.get(self.precision, torch.float32)  # type: ignore[assignment]
 
         use_scaler = self.precision == "fp16" and device == "cuda"
         self.scaler = GradScaler(enabled=use_scaler)
+
+        self.use_channels_last = (
+            getattr(config, "channels_last", False) and device == "cuda"
+        )
+        if self.use_channels_last:
+            self.model = self.model.to(memory_format=torch.channels_last)  # type: ignore[call-overload]
+
+        if getattr(config, "compile_model", False) and device == "cuda":
+            self.model = torch.compile(self.model, mode="reduce-overhead")
 
         self.checkpoint_dir = getattr(config, "checkpoint_dir", "checkpoints")
         os.makedirs(self.checkpoint_dir, exist_ok=True)
@@ -63,10 +71,10 @@ class Trainer:
     def _batch_to_device(
         self, batch: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        return {k: v.to(self.device) for k, v in batch.items()}
+        return {k: v.to(self.device, non_blocking=True) for k, v in batch.items()}
 
     def train_epoch(self, dataloader: DataLoader, epoch: int) -> float:
-        self.model.train()
+        self.model.train()  # type: ignore[assignment]
         total_loss = 0.0
         n_batches = len(dataloader)
         pbar = tqdm(enumerate(dataloader), total=n_batches, desc=f"Epoch {epoch}")
@@ -74,8 +82,8 @@ class Trainer:
             batch = self._batch_to_device(batch)
             images, masks = batch["image"], batch["mask"]
 
-            for param in self.model.parameters():
-                param.grad = None
+            # PyTorch optimization: Set grad to None instead of zero for efficiency
+            self.optimizer.zero_grad(set_to_none=True)
 
             with torch.autocast(device_type=self.device, dtype=self.dtype):
                 outputs = self.model(images)
@@ -87,6 +95,9 @@ class Trainer:
             else:
                 loss.backward()
                 self.optimizer.step()
+
+            if self.scheduler is not None:
+                self.scheduler.step()
             total_loss += loss.item()
             pbar.set_postfix({"loss": total_loss / (batch_idx + 1)})
         avg_loss = total_loss / n_batches
@@ -97,7 +108,7 @@ class Trainer:
 
     @torch.no_grad()
     def validate_epoch(self, dataloader: DataLoader, epoch: int) -> float:
-        self.model.eval()
+        self.model.eval()  # type: ignore[assignment]
         total_loss = 0.0
         n_batches = len(dataloader)
         pbar = tqdm(enumerate(dataloader), total=n_batches, desc=f"Validate {epoch}")
@@ -129,16 +140,13 @@ class Trainer:
                 f"Epoch {epoch}: Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}"
             )
 
-            if self.scheduler is not None:
-                self.scheduler.step()
-
             is_best = val_loss < best_val_loss
             if is_best:
                 best_val_loss = val_loss
 
             state = {
                 "epoch": epoch,
-                "model_state_dict": self.model.state_dict(),
+                "model_state_dict": self.model.state_dict(),  # type: ignore[assignment]
                 "optimizer_state_dict": self.optimizer.state_dict(),
                 "scheduler_state_dict": self.scheduler.state_dict()
                 if self.scheduler

@@ -1,3 +1,4 @@
+# pyright: reportPrivateImportUsage=false
 import argparse
 import importlib
 import math
@@ -9,7 +10,9 @@ from torch.utils.data import DataLoader
 from torch_datasets.landcover_dataset import LandcoverDataset
 from torch_datasets.transforms import TrainTransform, ValTransform
 from training.checkpointing import load_checkpoint
-from training.configs.baseline_config import Config
+from training.configs.baseline import Config
+from training.dummy_criterion import DiceLoss
+from training.dummy_model import LinearBaseline
 from training.trainer import Trainer
 
 
@@ -17,7 +20,6 @@ def get_config(config_name: str) -> Config:
     try:
         module_name = f"training.configs.{config_name}"
         module = importlib.import_module(module_name)
-
         if hasattr(module, "Config"):
             config_cls = module.Config
             if isinstance(config_cls, type) and issubclass(config_cls, Config):
@@ -35,7 +37,6 @@ def get_cosine_schedule_with_warmup(
     num_warmup_steps: int,
     num_training_steps: int,
 ) -> LambdaLR:
-
     def lr_lambda(current_step: int) -> float:
         if current_step < num_warmup_steps:
             return float(current_step) / float(max(1, num_warmup_steps))
@@ -56,20 +57,28 @@ def main() -> None:
         help="Name of the config to use (default: baseline)",
     )
     parser.add_argument(
-        "--resume", action="store_true", help="Path to checkpoint to resume from"
+        "--resume", type=str, default=None, help="Path to checkpoint to resume from"
     )
     args = parser.parse_args()
+
+    # Enable TF32 for faster computation on Tensor Cores
+    torch.backends.cudnn.allow_tf32 = True
+    torch.backends.cuda.matmul.allow_tf32 = True
+    # Enable cuDNN auto-tuner for convolutional networks
+    torch.backends.cudnn.benchmark = True
 
     config = get_config(args.config)
     print(f"Using config: {config}")
 
-    model = None  # TODO: initialize model here
-    optimizer = None  # TODO: initialize optimizer here
-    criterion = None  # TODO: initialize loss function here
+    model = LinearBaseline(in_channels=3, out_channels=1).to(config.device)
+
+    criterion = DiceLoss()
+
+    # Optimizer setup with weight decay discrimination
     decay, no_decay = [], []
-    for _, name, param in [
+    for _module, name, param in [
         *((model, n, p) for n, p in model.named_parameters()),
-        *((criterion, n, p) for n, p in criterion.named_parameters()),
+        # *((criterion, n, p) for n, p in criterion.named_parameters()),
     ]:
         if not param.requires_grad:
             continue
@@ -77,6 +86,7 @@ def main() -> None:
             no_decay.append(param)
         else:
             decay.append(param)
+
     optimizer = torch.optim.AdamW(
         [
             {"params": decay, "weight_decay": config.weight_decay},
@@ -89,13 +99,45 @@ def main() -> None:
         ),
         eps=getattr(config, "adam_eps", 1e-6),
     )
+
+    # Datasets and loaders created before scheduler so we can compute accurate step counts
+    train_dataset = LandcoverDataset(
+        image_dir=config.data_dir,
+        split_file=config.train_split_file,
+        transform=TrainTransform(),
+    )
+    val_dataset = LandcoverDataset(
+        image_dir=config.data_dir,
+        split_file=config.val_split_file,
+        transform=ValTransform(),
+    )
+
+    pin_memory = config.device == "cuda"
+    persistent_workers = config.num_workers > 0
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=config.batch_size,
+        shuffle=True,
+        num_workers=config.num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
+        drop_last=True,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=config.batch_size,
+        shuffle=False,
+        num_workers=config.num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
+    )
+
     scheduler = None
     if getattr(config, "use_cosine_schedule", False):
-        estimated_steps_per_epoch = (
-            1000  # TODO: estimate this based on dataset size and batch size
-        )
-        total_steps = estimated_steps_per_epoch * config.num_epochs
-        warmup_steps = estimated_steps_per_epoch * getattr(config, "warmup_epochs", 1)
+        steps_per_epoch = len(train_loader)
+        total_steps = steps_per_epoch * config.num_epochs
+        warmup_steps = steps_per_epoch * getattr(config, "warmup_epochs", 1)
         scheduler = get_cosine_schedule_with_warmup(
             optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps
         )
@@ -105,8 +147,8 @@ def main() -> None:
         )
 
     start_epoch = 1
-    if args.resume:
-        start_epoch, val_loss = load_checkpoint(
+    if args.resume is not None:
+        start_epoch, _ = load_checkpoint(
             checkpoint_path=args.resume,
             model=model,
             optimizer=optimizer,
@@ -115,33 +157,6 @@ def main() -> None:
         model.to(config.device)
         start_epoch += 1
         print(f"Resumed from checkpoint {args.resume}, starting at epoch {start_epoch}")
-
-    train_dataset = LandcoverDataset(
-        image_dir=config.train_image_dir,
-        split_file=config.train_split_file,
-        transform=TrainTransform(),
-    )
-
-    val_dataset = LandcoverDataset(
-        image_dir=config.val_image_dir,
-        split_file=config.val_split_file,
-        transform=ValTransform(),
-    )
-    test_dataset = LandcoverDataset(
-        image_dir=config.test_image_dir,
-        split_file=config.test_split_file,
-        transform=ValTransform(),
-    )
-
-    train_loader = DataLoader(
-        train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=4
-    )
-    val_loader = DataLoader(
-        val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4
-    )
-    test_loader = DataLoader(
-        test_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4
-    )
 
     trainer = Trainer(
         model=model,
