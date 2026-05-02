@@ -74,7 +74,8 @@ class Trainer:
             batch = self._batch_to_device(batch)
             images, masks = batch["image"], batch["mask"]
 
-            self.optimizer.zero_grad()
+            for param in self.model.parameters():
+                param.grad = None
 
             with torch.autocast(device_type=self.device, dtype=self.dtype):
                 outputs = self.model(images)
