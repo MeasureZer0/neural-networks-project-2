@@ -85,6 +85,11 @@ class DeepLabV3(nn.Module):
             for param in self.backbone.parameters():
                 param.requires_grad = False
 
+            for m in self.backbone.modules():
+                if isinstance(m, nn.BatchNorm2d):
+                    m.eval()
+                    m.requires_grad_(False)
+
         # ASPP module (your implementation)
         self.aspp = ASPP(in_channels=2048, out_channels=256)
 
