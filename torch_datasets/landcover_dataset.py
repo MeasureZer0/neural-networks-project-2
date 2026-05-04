@@ -31,7 +31,7 @@ class LandcoverDataset(Dataset):
     def __len__(self) -> int:
         return len(self.ids)
 
-    def __getitem__(self, idx: int) -> Dict[str, Tensor]:
+    def __getitem__(self, idx: int) -> Dict[str, Tensor | str]:
         sample_id = self.ids[idx]
 
         image_path = self.image_dir / f"{sample_id}.jpg"
@@ -46,6 +46,7 @@ class LandcoverDataset(Dataset):
 
         if self.transform is not None:
             image, mask = self.transform(image_np, mask_np)
+            mask = mask.long()
         else:
             image = torch.from_numpy(image_np).permute(2, 0, 1).float() / 255.0
             mask = torch.from_numpy(mask_np).long()
