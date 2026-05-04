@@ -81,6 +81,8 @@ class Trainer:
         for batch_idx, batch in pbar:
             batch = self._batch_to_device(batch)
             images, masks = batch["image"], batch["mask"]
+            if self.use_channels_last:
+                images = images.to(memory_format=torch.channels_last)  # type: ignore[assignment]
 
             # PyTorch optimization: Set grad to None instead of zero for efficiency
             self.optimizer.zero_grad(set_to_none=True)
@@ -115,6 +117,8 @@ class Trainer:
         for batch_idx, batch in pbar:
             batch = self._batch_to_device(batch)
             images, masks = batch["image"], batch["mask"]
+            if self.use_channels_last:
+                images = images.to(memory_format=torch.channels_last)  # type: ignore[assignment]
 
             with torch.autocast(device_type=self.device, dtype=self.dtype):
                 outputs = self.model(images)

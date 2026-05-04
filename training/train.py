@@ -93,6 +93,7 @@ def main() -> None:
             {"params": no_decay, "weight_decay": 0.0},
         ],
         lr=config.lr,
+        fused=True,
         betas=(
             getattr(config, "adam_beta1", 0.9),
             getattr(config, "adam_beta2", 0.98),

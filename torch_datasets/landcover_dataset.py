@@ -31,7 +31,7 @@ class LandcoverDataset(Dataset):
     def __len__(self) -> int:
         return len(self.ids)
 
-    def __getitem__(self, idx: int) -> Dict[str, Tensor]:
+    def __getitem__(self, idx: int) -> Dict[str, Tensor | str]:
         sample_id = self.ids[idx]
 
         image_path = self.image_dir / f"{sample_id}.jpg"
