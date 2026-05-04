@@ -7,11 +7,11 @@ import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
+from models.UNet import UNet
 from torch_datasets.landcover_dataset import LandcoverDataset
 from torch_datasets.transforms import TrainTransform, ValTransform
 from training.checkpointing import load_checkpoint
 from training.configs.baseline import BaselineConfig
-from training.models import UNet
 from training.trainer import Trainer
 
 
