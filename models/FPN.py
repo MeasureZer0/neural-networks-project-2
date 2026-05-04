@@ -2,96 +2,61 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torchvision.models import ResNet50_Weights, resnet50
 
 
-class LateralBlock(nn.Module):
+class LateralConnection(nn.Module):
     def __init__(self, in_channels: int, out_channels: int) -> None:
         super().__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
-        self.bn = nn.BatchNorm2d(out_channels)
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.relu(self.bn(self.conv(x)))
+        return self.conv(x)
 
 
 class OutputBlock(nn.Module):
     def __init__(self, out_channels: int) -> None:
         super().__init__()
-        self.conv = nn.Conv2d(
-            out_channels, out_channels, kernel_size=3, padding=1, bias=False
-        )
-        self.bn = nn.BatchNorm2d(out_channels)
+        self.conv = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.relu(self.bn(self.conv(x)))
+        return self.conv(x)
 
 
 class FPN(nn.Module):
-    def __init__(
-        self,
-        out_channels: int = 256,
-        pretrained: bool = True,
-        freeze_backbone: bool = True,
-    ) -> None:
+    def __init__(self, out_channels: int = 256, pretrained: bool = True) -> None:
         super().__init__()
 
-        self.out_channels = out_channels
-
-        # example from paper with resnet50
         weights = ResNet50_Weights.IMAGENET1K_V1 if pretrained else None
         backbone = resnet50(weights=weights)
 
         self.c1 = nn.Sequential(
             backbone.conv1, backbone.bn1, backbone.relu, backbone.maxpool
         )
-        self.c2 = backbone.layer1
-        self.c3 = backbone.layer2
-        self.c4 = backbone.layer3
-        self.c5 = backbone.layer4
+        self.c2 = backbone.layer1  # 256
+        self.c3 = backbone.layer2  # 512
+        self.c4 = backbone.layer3  # 1024
+        self.c5 = backbone.layer4  # 2048
 
-        if freeze_backbone:
-            for param in [
-                *self.c1.parameters(),
-                *self.c2.parameters(),
-                *self.c3.parameters(),
-                *self.c4.parameters(),
-                *self.c5.parameters(),
-            ]:
-                param.requires_grad = False
+        self.lat5 = LateralConnection(2048, out_channels)
+        self.lat4 = LateralConnection(1024, out_channels)
+        self.lat3 = LateralConnection(512, out_channels)
+        self.lat2 = LateralConnection(256, out_channels)
 
-        self.lat5 = LateralBlock(2048, out_channels)
-        self.lat4 = LateralBlock(1024, out_channels)
-        self.lat3 = LateralBlock(512, out_channels)
-        self.lat2 = LateralBlock(256, out_channels)
+        self.up5to4 = nn.ConvTranspose2d(
+            out_channels, out_channels, kernel_size=4, stride=2, padding=1
+        )
+        self.up4to3 = nn.ConvTranspose2d(
+            out_channels, out_channels, kernel_size=4, stride=2, padding=1
+        )
+        self.up3to2 = nn.ConvTranspose2d(
+            out_channels, out_channels, kernel_size=4, stride=2, padding=1
+        )
 
         self.out5 = OutputBlock(out_channels)
         self.out4 = OutputBlock(out_channels)
         self.out3 = OutputBlock(out_channels)
         self.out2 = OutputBlock(out_channels)
-
-        self._init_weights()
-
-    def _init_weights(self) -> None:
-        for module in [
-            self.lat5,
-            self.lat4,
-            self.lat3,
-            self.lat2,
-            self.out5,
-            self.out4,
-            self.out3,
-            self.out2,
-        ]:
-            for m in module.modules():
-                if isinstance(m, nn.Conv2d):
-                    nn.init.kaiming_normal_(
-                        m.weight, mode="fan_out", nonlinearity="relu"
-                    )
-                elif isinstance(m, nn.BatchNorm2d):
-                    nn.init.constant_(m.weight, 1.0)
-                    nn.init.constant_(m.bias, 0.0)
 
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         c1 = self.c1(x)
@@ -105,20 +70,67 @@ class FPN(nn.Module):
         m3 = self.lat3(c3)
         m2 = self.lat2(c2)
 
-        m4 = m4 + F.interpolate(m5, size=m4.shape[-2:], mode="nearest")
-        m3 = m3 + F.interpolate(m4, size=m3.shape[-2:], mode="nearest")
-        m2 = m2 + F.interpolate(m3, size=m2.shape[-2:], mode="nearest")
+        m4 = m4 + self.up5to4(m5)
+        m3 = m3 + self.up4to3(m4)
+        m2 = m2 + self.up3to2(m3)
 
-        p5 = self.out5(m5)
-        p4 = self.out4(m4)
-        p3 = self.out3(m3)
-        p2 = self.out2(m2)
-
-        out: dict[str, torch.Tensor] = {
-            "P2": p2,
-            "P3": p3,
-            "P4": p4,
-            "P5": p5,
+        return {
+            "P2": self.out2(m2),
+            "P3": self.out3(m3),
+            "P4": self.out4(m4),
+            "P5": self.out5(m5),
         }
 
-        return out
+
+class SegmentationHead(nn.Module):
+    def __init__(self, in_channels: int, num_classes: int) -> None:
+        super().__init__()
+
+        self.upP3 = nn.ConvTranspose2d(
+            in_channels, in_channels, kernel_size=4, stride=2, padding=1
+        )
+        self.upP4 = nn.ConvTranspose2d(
+            in_channels, in_channels, kernel_size=8, stride=4, padding=2
+        )
+        self.upP5 = nn.ConvTranspose2d(
+            in_channels, in_channels, kernel_size=16, stride=8, padding=4
+        )
+
+        self.conv_block = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True),
+        )
+
+        self.classifier = nn.Conv2d(in_channels, num_classes, kernel_size=1)
+
+        self.final_up = nn.ConvTranspose2d(
+            num_classes, num_classes, kernel_size=8, stride=4, padding=2
+        )
+
+    def forward(self, features: dict[str, torch.Tensor]) -> torch.Tensor:
+        p2 = features["P2"]
+        p3_up = self.upP3(features["P3"])
+        p4_up = self.upP4(features["P4"])
+        p5_up = self.upP5(features["P5"])
+
+        merged = p2 + p3_up + p4_up + p5_up
+
+        x = self.conv_block(merged)
+        logits = self.classifier(x)
+
+        return self.final_up(logits)
+
+
+class FPNSegmentation(nn.Module):
+    def __init__(self, num_classes: int = 5, out_channels: int = 256) -> None:
+        super().__init__()
+        self.fpn = FPN(out_channels)
+        self.head = SegmentationHead(out_channels, num_classes)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        features = self.fpn(x)
+        return self.head(features)
