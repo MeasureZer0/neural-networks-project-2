@@ -10,26 +10,26 @@ from torch.utils.data import DataLoader
 from torch_datasets.landcover_dataset import LandcoverDataset
 from torch_datasets.transforms import TrainTransform, ValTransform
 from training.checkpointing import load_checkpoint
-from training.configs.baseline import Config
-from training.dummy_criterion import DiceLoss
-from training.dummy_model import LinearBaseline
+from training.configs.baseline import BaselineConfig
+from training.models import UNet
 from training.trainer import Trainer
 
 
-def get_config(config_name: str) -> Config:
+def get_config(config_name: str) -> BaselineConfig:
     try:
         module_name = f"training.configs.{config_name}"
         module = importlib.import_module(module_name)
         if hasattr(module, "Config"):
             config_cls = module.Config
-            if isinstance(config_cls, type) and issubclass(config_cls, Config):
+            if isinstance(config_cls, type) and issubclass(config_cls, BaselineConfig):
                 return config_cls()
-            elif isinstance(config_cls, Config):
+            elif isinstance(config_cls, BaselineConfig):
                 return config_cls
     except (ImportError, AttributeError) as e:
         print(f"Error loading config {config_name}: {e}")
-        print("Using default Config")
-    return Config()
+        print("Using default BaselineConfig")
+
+    return BaselineConfig()
 
 
 def get_cosine_schedule_with_warmup(
@@ -70,15 +70,14 @@ def main() -> None:
     config = get_config(args.config)
     print(f"Using config: {config}")
 
-    model = LinearBaseline(in_channels=3, out_channels=1).to(config.device)
+    model = UNet().to(config.device)
 
-    criterion = DiceLoss()
+    criterion = torch.nn.CrossEntropyLoss()
 
-    # Optimizer setup with weight decay discrimination
     decay, no_decay = [], []
-    for _module, name, param in [
+    for _, name, param in [
         *((model, n, p) for n, p in model.named_parameters()),
-        # *((criterion, n, p) for n, p in criterion.named_parameters()),
+        *((criterion, n, p) for n, p in criterion.named_parameters()),
     ]:
         if not param.requires_grad:
             continue
@@ -101,7 +100,6 @@ def main() -> None:
         eps=getattr(config, "adam_eps", 1e-6),
     )
 
-    # Datasets and loaders created before scheduler so we can compute accurate step counts
     train_dataset = LandcoverDataset(
         image_dir=config.data_dir,
         split_file=config.train_split_file,

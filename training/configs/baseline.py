@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 @dataclass
-class Config:
+class BaselineConfig:
     name: str = "baseline"
     weight_decay: float = 1e-4
     lr: float = 1e-3

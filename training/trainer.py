@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from training.checkpointing import save_checkpoint
-from training.configs.baseline import Config
+from training.configs.baseline import BaselineConfig
 
 
 class Trainer:
@@ -21,7 +21,7 @@ class Trainer:
         criterion: nn.Module,
         scheduler: Optional[LRScheduler],
         device: str,
-        config: Config,
+        config: BaselineConfig,
         start_epoch: int = 0,
     ) -> None:
         self.model = model

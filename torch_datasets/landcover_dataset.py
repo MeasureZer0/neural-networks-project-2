@@ -46,6 +46,7 @@ class LandcoverDataset(Dataset):
 
         if self.transform is not None:
             image, mask = self.transform(image_np, mask_np)
+            mask = mask.long()
         else:
             image = torch.from_numpy(image_np).permute(2, 0, 1).float() / 255.0
             mask = torch.from_numpy(mask_np).long()
