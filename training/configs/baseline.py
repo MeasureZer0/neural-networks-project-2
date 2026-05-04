@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 @dataclass
-class Config:
+class BaselineConfig:
     name: str = "baseline"
     weight_decay: float = 1e-4
     lr: float = 1e-3
@@ -11,7 +11,7 @@ class Config:
     batch_size: int = 16
     num_workers: int = 4
     device: str = "cuda"
-    precision: str = "bfp16"
+    precision: str = "bf16"
     use_wandb: bool = False
     wandb_project: str = "semantic-segmentation"
     checkpoint_dir: str = "checkpoints"
