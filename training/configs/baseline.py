@@ -8,7 +8,7 @@ class BaselineConfig:
     weight_decay: float = 1e-4
     lr: float = 1e-3
     num_epochs: int = 10
-    batch_size: int = 16
+    batch_size: int = 8
     num_workers: int = 4
     device: str = "cuda"
     precision: str = "bf16"

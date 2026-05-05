@@ -7,13 +7,18 @@ import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
+from models.deeplabv3_model import DeepLabV3
 from models.FPN import FPNSegmentation
+from models.UNet import UNet
 from torch_datasets.landcover_dataset import LandcoverDataset
 from torch_datasets.transforms import TrainTransform, ValTransform
 from training.checkpointing import load_checkpoint
 from training.configs.baseline import BaselineConfig
-from training.loss import DiceLoss
+from training.loss import CELoss, DiceLoss, FocalLoss
 from training.trainer import Trainer
+
+MODELS = ("fpn", "unet", "deeplabv3")
+LOSSES = ("dice", "ce", "focal")
 
 
 def get_config(config_name: str) -> BaselineConfig:
@@ -60,6 +65,26 @@ def main() -> None:
     parser.add_argument(
         "--resume", type=str, default=None, help="Path to checkpoint to resume from"
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        choices=MODELS,
+        help=(
+            "Model architecture to use. Overrides the value from config if provided. "
+            f"Choices: {MODELS}"
+        ),
+    )
+    parser.add_argument(
+        "--loss",
+        type=str,
+        default=None,
+        choices=LOSSES,
+        help=(
+            "Loss function to use. Overrides the value from config if provided. "
+            f"Choices: {LOSSES}"
+        ),
+    )
     args = parser.parse_args()
 
     # Enable TF32 for faster computation on Tensor Cores
@@ -71,9 +96,31 @@ def main() -> None:
     config = get_config(args.config)
     print(f"Using config: {config}")
 
-    model = FPNSegmentation().to(config.device)
+    model_name: str = args.model or getattr(config, "model", None) or "fpn"
 
-    criterion = DiceLoss()
+    if model_name == "fpn":
+        model = FPNSegmentation()
+    elif model_name == "unet":
+        model = UNet()
+    elif model_name == "deeplabv3":
+        model = DeepLabV3()
+    else:
+        raise ValueError(f"Unknown model: {model_name!r}. Choose from {MODELS}.")
+
+    model = model.to(config.device)
+    print(f"Model: {model_name}")
+
+    loss_name: str = args.loss or getattr(config, "loss", None) or "dice"
+
+    if loss_name == "dice":
+        criterion: torch.nn.Module = DiceLoss()
+    elif loss_name == "ce":
+        criterion = CELoss()
+    elif loss_name == "focal":
+        criterion = FocalLoss()
+    else:
+        raise ValueError(f"Unknown loss: {loss_name!r}. Choose from {LOSSES}.")
+    print(f"Loss: {loss_name}")
 
     decay, no_decay = [], []
     for _, name, param in [
