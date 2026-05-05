@@ -68,7 +68,7 @@ class ASPP(nn.Module):
 class DeepLabV3(nn.Module):
     def __init__(
         self,
-        num_classes: int = 4,
+        num_classes: int = 5,
         pretrained: bool = True,
         freeze_backbone: bool = True,
     ) -> None:
