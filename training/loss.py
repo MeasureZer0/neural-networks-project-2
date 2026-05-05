@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class CELoss(nn.Module):
     def __init__(self) -> None:
-        super(CELoss, self).__init__()
+        super().__init__()
         self.ce = nn.CrossEntropyLoss()
 
     def forward(
@@ -18,7 +18,7 @@ class CELoss(nn.Module):
 
 class DiceLoss(nn.Module):
     def __init__(self, smooth: float = 1.0) -> None:
-        super(DiceLoss, self).__init__()
+        super().__init__()
         self.smooth = smooth
 
     def forward(
@@ -33,8 +33,8 @@ class DiceLoss(nn.Module):
         targets_one_hot = F.one_hot(targets, num_classes).permute(0, 3, 1, 2).float()
 
         dims = (0, 2, 3)
-        intersection = torch.sum(probs * targets_one_hot, dims)
-        cardinality = torch.sum(probs + targets_one_hot, dims)
+        intersection = torch.sum(probs * targets_one_hot, dims)  # type: ignore[assignment]
+        cardinality = torch.sum(probs + targets_one_hot, dims)  # type: ignore[assignment]
 
         dice_score = (2.0 * intersection + self.smooth) / (cardinality + self.smooth)
         return 1 - dice_score.mean()
@@ -53,7 +53,7 @@ class FocalLoss(nn.Module):
     ) -> torch.Tensor:
 
         ce_loss = F.cross_entropy(logits, targets, reduction="none")
-        pt = torch.exp(-ce_loss)
+        pt = torch.exp(-ce_loss)  # type: ignore[assignment]
         focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
 
         return focal_loss.mean()
