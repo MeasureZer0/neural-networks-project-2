@@ -1232,7 +1232,7 @@ wheels = [
 ]
 
 [[package]]
-name = "neural-networks-project-1"
+name = "neural-networks-project-2"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

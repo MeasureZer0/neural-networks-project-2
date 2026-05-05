@@ -98,10 +98,10 @@ class SegmentationHead(nn.Module):
 
         self.conv_block = nn.Sequential(
             nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(in_channels),
+            nn.GroupNorm(32, in_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(in_channels),
+            nn.GroupNorm(32, in_channels),
             nn.ReLU(inplace=True),
         )
 
