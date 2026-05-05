@@ -1,5 +1,5 @@
 [project]
-name = "neural-networks-project-1"
+name = "neural-networks-project-2"
 version = "0.1.0"
 description = "Multimodal classification: text + image data"
 readme = "README.md"

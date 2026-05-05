@@ -12,6 +12,7 @@ from torch_datasets.landcover_dataset import LandcoverDataset
 from torch_datasets.transforms import TrainTransform, ValTransform
 from training.checkpointing import load_checkpoint
 from training.configs.baseline import BaselineConfig
+from training.loss import DiceLoss
 from training.trainer import Trainer
 
 
@@ -72,7 +73,7 @@ def main() -> None:
 
     model = FPNSegmentation().to(config.device)
 
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = DiceLoss()
 
     decay, no_decay = [], []
     for _, name, param in [
