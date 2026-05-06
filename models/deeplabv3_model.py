@@ -90,7 +90,7 @@ class DeepLabV3(nn.Module):
                     m.eval()
                     m.requires_grad_(False)
 
-        # ASPP module (your implementation)
+        # ASPP module
         self.aspp = ASPP(in_channels=2048, out_channels=256)
 
         # Final segmentation head
