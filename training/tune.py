@@ -4,6 +4,8 @@ from pathlib import Path
 
 import optuna
 import torch
+import wandb
+from optuna.integration.wandb import WeightsAndBiasesCallback
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
@@ -145,12 +147,32 @@ def main(
     timeout: int | None = None,
     study_name: str | None = None,
     storage: str | None = "sqlite:///optuna.db",
+    use_wandb: bool = False,
 ) -> None:
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
     config = BaselineConfig()
+
+    callbacks = []
+    if use_wandb:
+        wandb.init(
+            project=getattr(config, "wandb_project", "semantic-segmentation"),
+            name=study_name or f"{model_name}_{loss_name}_tune",
+            config={
+                "model": model_name,
+                "loss": loss_name,
+                "n_trials": n_trials,
+                "n_epochs_tune": n_epochs_tune,
+            },
+        )
+        callbacks.append(
+            WeightsAndBiasesCallback(
+                metric_name="val_loss",
+                wandb_kwargs={"reinit": False},
+            )
+        )
 
     train_loader = make_loader(
         config, config.train_split_file, shuffle=True, drop_last=True
@@ -175,11 +197,22 @@ def main(
             model_name,
             loss_name,
             n_epochs_tune,
+            use_wandb,
         ),
         n_trials=n_trials,
         timeout=timeout,
+        callbacks=callbacks,
     )
+
+    if use_wandb:
+        wandb.log(
+            {
+                "best_val_loss": study.best_value,
+                **{f"best/{k}": v for k, v in study.best_params.items()},
+            }
+        )
+        wandb.finish()
 
 
 if __name__ == "__main__":
-    main(model_name="fpn", loss_name="dice")
+    main(model_name="fpn", loss_name="dice", use_wandb=True)
