@@ -1,5 +1,6 @@
 import math
 import os
+from pathlib import Path
 
 import optuna
 import torch
@@ -121,8 +122,8 @@ def objective(
 
 def make_loader(
     config: BaselineConfig,
-    split_file: str,
-    shuffle: bool,
+    split_file: Path,
+    shuffle: bool = False,
     drop_last: bool = False,
 ) -> DataLoader:
     return DataLoader(
