@@ -1,3 +1,4 @@
+import importlib
 import math
 import os
 from pathlib import Path
@@ -24,6 +25,21 @@ LOSSES = {"dice": DiceLoss, "ce": CELoss, "focal": FocalLoss}
 CHECKPOINT_BASE = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "checkpoints", "tune"
 )
+
+
+def get_config(config_name: str) -> BaselineConfig:
+    try:
+        module_name = f"training.configs.{config_name}"
+        module = importlib.import_module(module_name)
+        if hasattr(module, "Config"):
+            config_cls = module.Config
+            if isinstance(config_cls, type) and issubclass(config_cls, BaselineConfig):
+                return config_cls()
+            elif isinstance(config_cls, BaselineConfig):
+                return config_cls
+    except (ImportError, AttributeError):
+        pass
+    return BaselineConfig()
 
 
 def cosine_schedule(
@@ -142,6 +158,7 @@ def make_loader(
 def main(
     model_name: str = "fpn",
     loss_name: str = "dice",
+    config_name: str = "baseline",
     n_trials: int = 50,
     n_epochs_tune: int = 5,
     timeout: int | None = None,
@@ -153,7 +170,7 @@ def main(
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
-    config = BaselineConfig()
+    config = get_config(config_name)
 
     callbacks = []
     if use_wandb:
@@ -215,4 +232,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(model_name="fpn", loss_name="dice", use_wandb=True)
+    main(model_name="fpn", loss_name="dice", use_wandb=True, config_name="baseline")
