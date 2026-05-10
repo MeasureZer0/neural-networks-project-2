@@ -5,12 +5,13 @@ from training.configs.baseline import BaselineConfig
 
 @dataclass
 class Config(BaselineConfig):
-    name: str = "unet_baseline"
-    model: str = "unet"
-    pretrained: bool = False
+    name: str = "fpn_baseline"
+    model: str = "fpn"
+    pretrained: bool = True
+    freeze_backbone: bool = False
     num_classes: int = 5
     loss: str = "dice"
-    lr: float = 3e-4
+    lr: float = 1e-3
     weight_decay: float = 1e-4
     num_epochs: int = 30
     batch_size: int = 8
@@ -18,4 +19,3 @@ class Config(BaselineConfig):
     warmup_epochs: int = 2
     compile_model: bool = True
     channels_last: bool = True
-    use_wandb: bool = False
