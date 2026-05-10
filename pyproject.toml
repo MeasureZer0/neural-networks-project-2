@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=2.4.2",
     "opencv-python>=4.13.0.92",
     "optuna>=4.8.0",
+    "optuna-integration[wandb]>=4.8.0",
     "pandas>=3.0.1",
     "pillow>=12.1.1",
     "scikit-learn>=1.8.0",
