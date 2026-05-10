@@ -16,14 +16,6 @@ from training.configs.baseline import BaselineConfig
 from training.loss import CELoss, DiceLoss, FocalLoss
 from training.trainer import Trainer
 
-MODEL_NAME = "fpn"
-LOSS_NAME = "dice"
-N_TRIALS = 50
-N_EPOCHS_TUNE = 5
-TIMEOUT = None
-STUDY_NAME = None
-STORAGE = "sqlite:///optuna.db"
-
 MODELS = {"fpn": FPNSegmentation, "unet": UNet, "deeplabv3": DeepLabV3}
 LOSSES = {"dice": DiceLoss, "ce": CELoss, "focal": FocalLoss}
 
@@ -51,6 +43,9 @@ def objective(
     base_config: BaselineConfig,
     train_loader: DataLoader,
     val_loader: DataLoader,
+    model_name: str,
+    loss_name: str,
+    n_epochs_tune: int,
 ) -> float:
     lr = trial.suggest_float("lr", 1e-5, 5e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
@@ -66,15 +61,16 @@ def objective(
     config.use_wandb = False
     config.checkpoint_dir = os.path.join(CHECKPOINT_BASE, f"trial_{trial.number}")
 
-    if LOSS_NAME == "focal":
-        criterion: torch.nn.Module = FocalLoss(
+    if loss_name == "focal":
+        criterion = FocalLoss(
             alpha=trial.suggest_float("focal_alpha", 0.25, 2.0),
             gamma=trial.suggest_float("focal_gamma", 0.5, 5.0),
         )
     else:
-        criterion = LOSSES[LOSS_NAME]()
+        criterion = LOSSES[loss_name]()
 
-    model = MODELS[MODEL_NAME]().to(config.device)
+    model = MODELS[model_name]().to(config.device)
+
     decay = []
     no_decay = []
     for name, param in [*model.named_parameters(), *criterion.named_parameters()]:
@@ -95,7 +91,7 @@ def objective(
 
     scheduler: LambdaLR | None = None
     if use_cosine:
-        steps = len(train_loader) * N_EPOCHS_TUNE
+        steps = len(train_loader) * n_epochs_tune
         scheduler = cosine_schedule(optimizer, len(train_loader) * warmup_epochs, steps)
 
     trainer = Trainer(
@@ -109,7 +105,7 @@ def objective(
     )
 
     best_val_loss = float("inf")
-    for epoch in range(1, N_EPOCHS_TUNE + 1):
+    for epoch in range(1, n_epochs_tune + 1):
         trainer.train_epoch(train_loader, epoch)
         val_loss = trainer.validate_epoch(val_loader, epoch)
         trial.report(val_loss, epoch)
@@ -141,7 +137,15 @@ def make_loader(
     )
 
 
-def main() -> None:
+def main(
+    model_name: str = "fpn",
+    loss_name: str = "dice",
+    n_trials: int = 50,
+    n_epochs_tune: int = 5,
+    timeout: int | None = None,
+    study_name: str | None = None,
+    storage: str | None = "sqlite:///optuna.db",
+) -> None:
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
@@ -154,16 +158,28 @@ def main() -> None:
     val_loader = make_loader(config, config.val_split_file, shuffle=False)
 
     study = optuna.create_study(
-        study_name=STUDY_NAME or f"{MODEL_NAME}_{LOSS_NAME}",
+        study_name=study_name or f"{model_name}_{loss_name}",
         direction="minimize",
-        storage=STORAGE,
+        storage=storage,
         load_if_exists=True,
         pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=2),
         sampler=optuna.samplers.TPESampler(seed=42),
     )
 
     study.optimize(
-        lambda trial: objective(trial, config, train_loader, val_loader),
-        n_trials=N_TRIALS,
-        timeout=TIMEOUT,
+        lambda trial: objective(
+            trial,
+            config,
+            train_loader,
+            val_loader,
+            model_name,
+            loss_name,
+            n_epochs_tune,
+        ),
+        n_trials=n_trials,
+        timeout=timeout,
     )
+
+
+if __name__ == "__main__":
+    main(model_name="fpn", loss_name="dice")
