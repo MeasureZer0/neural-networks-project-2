@@ -214,7 +214,6 @@ def main(
             model_name,
             loss_name,
             n_epochs_tune,
-            use_wandb,
         ),
         n_trials=n_trials,
         timeout=timeout,
