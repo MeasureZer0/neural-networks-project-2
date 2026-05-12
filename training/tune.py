@@ -148,6 +148,8 @@ def objective(
     num_classes: int = config.num_classes
     best_val_loss = float("inf")
 
+    mean_iou = 0.0
+    mean_dice = 0.0
     for epoch in range(1, n_epochs_tune + 1):
         train_loss = trainer.train_epoch(train_loader, epoch)
 
