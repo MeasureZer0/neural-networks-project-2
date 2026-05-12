@@ -57,3 +57,25 @@ class FocalLoss(nn.Module):
         focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
 
         return focal_loss.mean()
+
+
+class CEDiceLoss(nn.Module):
+    def __init__(
+        self, ce_weight: float = 1.0, dice_weight: float = 1.0, smooth: float = 1.0
+    ) -> None:
+        super().__init__()
+        self.ce = nn.CrossEntropyLoss()
+        self.dice = DiceLoss(smooth=smooth)
+        self.ce_weight = ce_weight
+        self.dice_weight = dice_weight
+
+    def forward(
+        self,
+        logits: torch.Tensor,  # [B, C, H, W]
+        targets: torch.Tensor,  # [B, H, W]
+    ) -> torch.Tensor:
+
+        ce_loss = self.ce(logits, targets)
+        dice_loss = self.dice(logits, targets)
+
+        return self.ce_weight * ce_loss + self.dice_weight * dice_loss

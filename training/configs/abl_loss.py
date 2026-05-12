@@ -44,4 +44,13 @@ class AblationLossFocal(_LossAblationBase):
     focal_gamma: float = 2.0
 
 
+@dataclass
+class AblationLossCEDice(_LossAblationBase):
+    name: str = "ablation_loss_ce_dice"
+    loss: str = "ce_dice"
+
+    ce_weight: float = 1.0
+    dice_weight: float = 1.0
+
+
 Config = AblationLossDice

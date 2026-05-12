@@ -43,7 +43,7 @@ from torch_datasets.landcover_dataset import LandcoverDataset
 from torch_datasets.transforms import TrainTransform, ValTransform
 from training.checkpointing import load_checkpoint
 from training.configs.baseline import BaselineConfig
-from training.loss import CELoss, DiceLoss, FocalLoss
+from training.loss import CEDiceLoss, CELoss, DiceLoss, FocalLoss
 from training.trainer import Trainer
 
 MODELS = ("fpn", "unet", "deeplabv3")
@@ -221,6 +221,10 @@ def main() -> None:
         criterion = CELoss()
     elif loss_name == "focal":
         criterion = FocalLoss()
+    elif loss_name == "ce_dice":
+        ce_weight = getattr(config, "ce_weight", 1.0)
+        dice_weight = getattr(config, "dice_weight", 1.0)
+        criterion = CEDiceLoss(ce_weight=ce_weight, dice_weight=dice_weight)
     else:
         raise ValueError(f"Unknown loss: {loss_name!r}. Choose from {LOSSES}.")
     print(f"Loss: {loss_name}")
