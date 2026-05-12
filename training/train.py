@@ -8,8 +8,36 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
 from models.deeplabv3_model import DeepLabV3
+from models.deeplabv3_variants import (
+    DeepLabV3Cascaded,
+    DeepLabV3Dropout,
+    DeepLabV3LargeDilations,
+    DeepLabV3NarrowASPP,
+    DeepLabV3NoASPP,
+    DeepLabV3NoGlobalPool,
+    DeepLabV3SmallDilations,
+)
+from models.deeplabv3_variants import DeepLabV3ShallowHead as DLV3ShallowHead
 from models.FPN import FPNSegmentation
+from models.FPN_variants import (
+    FPNConcatMerge,
+    FPNDeepHead,
+    FPNNoLateral,
+    FPNNoP5,
+    FPNShallowHead,
+    FPNSingleScale,
+    FPNSumMerge,
+)
 from models.UNet import UNet
+from models.UNet_variants import (
+    UNetDeepBottleneck,
+    UNetNarrow,
+    UNetNoBN,
+    UNetNoSkip,
+    UNetResidual,
+    UNetShallow,
+    UNetWide,
+)
 from torch_datasets.landcover_dataset import LandcoverDataset
 from torch_datasets.transforms import TrainTransform, ValTransform
 from training.checkpointing import load_checkpoint
@@ -21,10 +49,20 @@ MODELS = ("fpn", "unet", "deeplabv3")
 LOSSES = ("dice", "ce", "focal")
 
 
-def get_config(config_name: str) -> BaselineConfig:
+def get_config(config_name: str, variant_name: str | None = None) -> BaselineConfig:
     try:
         module_name = f"training.configs.{config_name}"
         module = importlib.import_module(module_name)
+
+        if variant_name:
+            variant_cls_name = f"{config_name.capitalize()}{variant_name.capitalize()}"
+            if hasattr(module, variant_cls_name):
+                variant_cls = getattr(module, variant_cls_name)
+                if isinstance(variant_cls, type) and issubclass(
+                    variant_cls, BaselineConfig
+                ):
+                    return variant_cls()
+
         if hasattr(module, "Config"):
             config_cls = module.Config
             if isinstance(config_cls, type) and issubclass(config_cls, BaselineConfig):
@@ -85,6 +123,9 @@ def main() -> None:
             f"Choices: {LOSSES}"
         ),
     )
+    parser.add_argument(
+        "--variant", type=str, default=None, help="Ablation variant name"
+    )
     args = parser.parse_args()
 
     # Enable TF32 for faster computation on Tensor Cores
@@ -93,17 +134,65 @@ def main() -> None:
     # Enable cuDNN auto-tuner for convolutional networks
     torch.backends.cudnn.benchmark = True
 
-    config = get_config(args.config)
+    config = get_config(args.config, args.variant)
     print(f"Using config: {config}")
 
     model_name: str = args.model or getattr(config, "model", None) or "fpn"
 
-    if model_name == "fpn":
-        model = FPNSegmentation()
-    elif model_name == "unet":
-        model = UNet()
+    variant = getattr(config, f"{model_name}_variant", None)
+
+    if model_name == "unet":
+        unet_map = {
+            "basic": UNet,
+            "no_skip": UNetNoSkip,
+            "shallow": UNetShallow,
+            "wide": UNetWide,
+            "narrow": UNetNarrow,
+            "no_bn": UNetNoBN,
+            "residual": UNetResidual,
+            "deep_bottleneck": UNetDeepBottleneck,
+        }
+        model_cls = unet_map.get(variant if variant else "basic", UNet)
+        model = model_cls(
+            in_channels=getattr(config, "in_channels", 3),
+            out_channels=config.num_classes,
+        )
+
+    elif model_name == "fpn":
+        fpn_map = {
+            "basic": FPNSegmentation,
+            "no_lateral": FPNNoLateral,
+            "single_scale": FPNSingleScale,
+            "sum_merge": FPNSumMerge,
+            "concat_merge": FPNConcatMerge,
+            "shallow_head": FPNShallowHead,
+            "deep_head": FPNDeepHead,
+            "no_p5": FPNNoP5,
+        }
+        model_cls = fpn_map.get(variant if variant else "basic", FPNSegmentation)
+        model = model_cls(
+            num_classes=config.num_classes,
+            out_channels=getattr(config, "out_channels", 256),
+        )
+
     elif model_name == "deeplabv3":
-        model = DeepLabV3()
+        dlv3_map = {
+            "basic": DeepLabV3,
+            "no_aspp": DeepLabV3NoASPP,
+            "no_global_pool": DeepLabV3NoGlobalPool,
+            "narrow_aspp": DeepLabV3NarrowASPP,
+            "small_dil": DeepLabV3SmallDilations,
+            "large_dil": DeepLabV3LargeDilations,
+            "shallow_head": DLV3ShallowHead,
+            "dropout": DeepLabV3Dropout,
+            "cascaded": DeepLabV3Cascaded,
+        }
+        model_cls = dlv3_map.get(variant if variant else "basic", DeepLabV3)
+        model = model_cls(
+            num_classes=config.num_classes,
+            pretrained=config.pretrained,
+            freeze_backbone=config.freeze_backbone,
+        )
     else:
         raise ValueError(f"Unknown model: {model_name!r}. Choose from {MODELS}.")
 
