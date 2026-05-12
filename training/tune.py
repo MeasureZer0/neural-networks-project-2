@@ -1,10 +1,3 @@
-"""
-Hyperparameter tuning with Optuna + W&B.
-
-Install deps:
-    pip install optuna optuna-integration wandb
-"""
-
 import importlib
 import math
 import os
