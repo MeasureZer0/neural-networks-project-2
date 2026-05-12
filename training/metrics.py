@@ -56,10 +56,6 @@ class SegmentationMetrics:
 
         self.confusion += batch_confusion
 
-    # -----------------------------
-    # Metric Computations
-    # -----------------------------
-
     def per_class_iou(self) -> Tensor:
         TP = torch.diag(self.confusion)
         FP = self.confusion.sum(dim=0) - TP
@@ -124,18 +120,12 @@ def full_segmentation_eval(
 
         metrics.update(logits, labels)
 
-    # -------------------------
-    # Overall scalar metrics
-    # -------------------------
     overall_results: Dict[str, float] = {
         "overall_pixel_accuracy": metrics.pixel_accuracy(),
         "mean_iou": metrics.mean_iou(),
         "mean_dice": metrics.mean_dice(),
     }
 
-    # -------------------------
-    # Per-class metrics
-    # -------------------------
     per_class_results: Dict[str, List[float]] = {
         "iou": metrics.per_class_iou().cpu().tolist(),
         "dice": metrics.per_class_dice().cpu().tolist(),
