@@ -1,5 +1,9 @@
+<<<<<<< feat/optuna
 from dataclasses import dataclass, field
 from typing import List
+=======
+from dataclasses import dataclass
+>>>>>>> main
 
 from training.configs.baseline import BaselineConfig
 
@@ -18,9 +22,13 @@ class _PretrainBase(BaselineConfig):
     compile_model: bool = True
     channels_last: bool = True
     use_wandb: bool = True
+<<<<<<< feat/optuna
     wandb_project: str = "semantic-segmentation"
     wandb_group: str = "abl_pretrained"
     wandb_tags: List[str] = field(default_factory=lambda: ["ablation", "pretrained"])
+=======
+    wandb_project: str = "semantic-segmentation-ablations"
+>>>>>>> main
 
 
 @dataclass

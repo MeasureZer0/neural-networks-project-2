@@ -1,37 +1,23 @@
-<<<<<<< feat/optuna
-from dataclasses import dataclass, field
-from typing import List
-=======
 from dataclasses import dataclass
->>>>>>> main
 
 from training.configs.baseline import BaselineConfig
 
 
 @dataclass
-<<<<<<< feat/optuna
-class FPNConfig(BaselineConfig):
-=======
 class Config(BaselineConfig):
->>>>>>> main
-    name: str = "fpn_baseline"
+    name: str = "ablation_arch"
     model: str = "fpn"
     pretrained: bool = True
     freeze_backbone: bool = False
     num_classes: int = 5
     loss: str = "dice"
-    lr: float = 1e-3
+    lr: float = 5e-4
     weight_decay: float = 1e-4
-    num_epochs: int = 30
+    num_epochs: int = 25
     batch_size: int = 8
     use_cosine_schedule: bool = True
     warmup_epochs: int = 2
     compile_model: bool = True
     channels_last: bool = True
-<<<<<<< feat/optuna
     use_wandb: bool = True
-    wandb_project: str = "semantic-segmentation"
-    wandb_group: str = "baselines"
-    wandb_tags: List[str] = field(default_factory=lambda: ["baseline", "fpn"])
-=======
->>>>>>> main
+    wandb_project: str = "semantic-segmentation-ablations"
