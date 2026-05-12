@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
 from training.configs.baseline import BaselineConfig
 
@@ -11,14 +12,16 @@ class _AugAblationBase(BaselineConfig):
     loss: str = "dice"
     lr: float = 3e-4
     weight_decay: float = 1e-4
-    num_epochs: int = 20
+    num_epochs: int = 12  # ~40% of 30 — wystarczy do porównania
     batch_size: int = 8
     use_cosine_schedule: bool = True
     warmup_epochs: int = 2
     compile_model: bool = True
     channels_last: bool = True
-    use_wandb: bool = False
-    wandb_project: str = "semantic-segmentation-ablations"
+    use_wandb: bool = True
+    wandb_project: str = "semantic-segmentation"
+    wandb_group: str = "abl_augmentation"
+    wandb_tags: List[str] = field(default_factory=lambda: ["ablation", "augmentation"])
 
 
 @dataclass
@@ -44,6 +47,17 @@ class AblationAugLight(_AugAblationBase):
 
 
 @dataclass
+class AblationAugNoCrop(_AugAblationBase):
+    name: str = "ablation_aug_no_crop"
+    hflip_p: float = 0.5
+    vflip_p: float = 0.5
+    rotate90_p: float = 0.5
+    color_jitter: bool = True
+    crop_scale_min: float = 1.0
+    crop_scale_max: float = 1.0
+
+
+@dataclass
 class AblationAugHeavy(_AugAblationBase):
     name: str = "ablation_aug_heavy"
     hflip_p: float = 0.5
@@ -55,17 +69,6 @@ class AblationAugHeavy(_AugAblationBase):
     jitter_saturation: float = 0.4
     jitter_hue: float = 0.15
     crop_scale_min: float = 0.5
-    crop_scale_max: float = 1.0
-
-
-@dataclass
-class AblationAugNoCrop(_AugAblationBase):
-    name: str = "ablation_aug_no_crop"
-    hflip_p: float = 0.5
-    vflip_p: float = 0.5
-    rotate90_p: float = 0.5
-    color_jitter: bool = True
-    crop_scale_min: float = 1.0
     crop_scale_max: float = 1.0
 
 

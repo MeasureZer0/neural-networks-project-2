@@ -1,10 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
 from training.configs.baseline import BaselineConfig
 
 
 @dataclass
-class Config(BaselineConfig):
+class DeepLabV3FinetuneConfig(BaselineConfig):
     name: str = "deeplabv3_finetune"
     model: str = "deeplabv3"
     pretrained: bool = True
@@ -20,3 +21,8 @@ class Config(BaselineConfig):
     compile_model: bool = True
     channels_last: bool = True
     use_wandb: bool = True
+    wandb_project: str = "semantic-segmentation"
+    wandb_group: str = "baselines"
+    wandb_tags: List[str] = field(
+        default_factory=lambda: ["baseline", "deeplabv3", "finetune"]
+    )
