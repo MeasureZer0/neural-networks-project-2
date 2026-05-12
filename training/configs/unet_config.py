@@ -1,10 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
 from training.configs.baseline import BaselineConfig
 
 
 @dataclass
-class Config(BaselineConfig):
+class UNetConfig(BaselineConfig):
     name: str = "unet_baseline"
     model: str = "unet"
     pretrained: bool = False
@@ -18,4 +19,7 @@ class Config(BaselineConfig):
     warmup_epochs: int = 2
     compile_model: bool = True
     channels_last: bool = True
-    use_wandb: bool = False
+    use_wandb: bool = True
+    wandb_project: str = "semantic-segmentation"
+    wandb_group: str = "baselines"
+    wandb_tags: List[str] = field(default_factory=lambda: ["baseline", "unet"])

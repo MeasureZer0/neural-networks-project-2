@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 
 from training.configs.baseline import BaselineConfig
 
@@ -11,14 +12,16 @@ class _LossAblationBase(BaselineConfig):
     num_classes: int = 5
     lr: float = 1e-3
     weight_decay: float = 1e-4
-    num_epochs: int = 20  # shorter runs for ablations
+    num_epochs: int = 12  # ~40% of 30
     batch_size: int = 8
     use_cosine_schedule: bool = True
     warmup_epochs: int = 2
     compile_model: bool = True
     channels_last: bool = True
     use_wandb: bool = True
-    wandb_project: str = "semantic-segmentation-ablations"
+    wandb_project: str = "semantic-segmentation"
+    wandb_group: str = "abl_loss"
+    wandb_tags: List[str] = field(default_factory=lambda: ["ablation", "loss"])
 
 
 @dataclass

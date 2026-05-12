@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 
 @dataclass
@@ -54,6 +54,7 @@ class BaselineConfig:
 
     checkpoint_dir: str = "checkpoints"
 
-    use_wandb: bool = False
+    use_wandb: bool = True
     wandb_project: str = "semantic-segmentation"
     wandb_entity: Optional[str] = None
+    wandb_tags: List[str] = field(default_factory=list)

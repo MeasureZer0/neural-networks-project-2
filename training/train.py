@@ -1,6 +1,7 @@
 # pyright: reportPrivateImportUsage=false
 import argparse
 import importlib
+import inspect
 import math
 
 import torch
@@ -55,24 +56,37 @@ def get_config(config_name: str, variant_name: str | None = None) -> BaselineCon
         module = importlib.import_module(module_name)
 
         if variant_name:
-            variant_cls_name = f"{config_name.capitalize()}{variant_name.capitalize()}"
-            if hasattr(module, variant_cls_name):
-                variant_cls = getattr(module, variant_cls_name)
-                if isinstance(variant_cls, type) and issubclass(
-                    variant_cls, BaselineConfig
+            possible_names = [
+                variant_name,
+                f"{variant_name}Config",
+                f"{config_name.capitalize()}{variant_name.capitalize()}",
+            ]
+            for name in possible_names:
+                cls = getattr(module, name, None)
+                if (
+                    inspect.isclass(cls)
+                    and issubclass(cls, BaselineConfig)
+                    and cls is not BaselineConfig
                 ):
-                    return variant_cls()
-
+                    return cls()
         if hasattr(module, "Config"):
-            config_cls = module.Config
-            if isinstance(config_cls, type) and issubclass(config_cls, BaselineConfig):
-                return config_cls()
-            elif isinstance(config_cls, BaselineConfig):
-                return config_cls
+            c = module.Config
+            return c() if inspect.isclass(c) else c
+
+        for name, obj in inspect.getmembers(module, inspect.isclass):
+            if (
+                issubclass(obj, BaselineConfig)
+                and obj is not BaselineConfig
+                and not name.startswith("_")
+            ):
+                return obj()
+
     except (ImportError, AttributeError) as e:
         print(f"Error loading config {config_name}: {e}")
-        print("Using default BaselineConfig")
 
+    print(
+        f"No specific config found in {config_name}, returning default BaselineConfig"
+    )
     return BaselineConfig()
 
 
@@ -212,9 +226,9 @@ def main() -> None:
     print(f"Loss: {loss_name}")
 
     decay, no_decay = [], []
-    for _, name, param in [
-        *((model, n, p) for n, p in model.named_parameters()),
-        *((criterion, n, p) for n, p in criterion.named_parameters()),
+    for name, param in [
+        *model.named_parameters(),
+        *criterion.named_parameters(),
     ]:
         if not param.requires_grad:
             continue

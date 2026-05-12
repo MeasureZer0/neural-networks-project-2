@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from training.checkpointing import save_checkpoint
 from training.configs.baseline import BaselineConfig
+from training.metrics import SegmentationMetrics
 
 
 class Trainer:
@@ -57,6 +58,8 @@ class Trainer:
         self.checkpoint_dir = getattr(config, "checkpoint_dir", "checkpoints")
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
+        self.num_classes: int = getattr(config, "num_classes", 5)
+
         self.use_wandb = getattr(config, "use_wandb", False)
         if self.use_wandb:
             import wandb
@@ -65,13 +68,24 @@ class Trainer:
             if self.wandb.run is None:
                 self.wandb.init(
                     project=getattr(config, "wandb_project", "semantic-segmentation"),
+                    entity=getattr(config, "wandb_entity", None),
+                    name=getattr(config, "name", None),
+                    group=getattr(config, "wandb_group", None),
+                    tags=getattr(config, "wandb_tags", None) or [],
                     config=vars(config),
                 )
 
     def _batch_to_device(
         self, batch: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        return {k: v.to(self.device, non_blocking=True) for k, v in batch.items()}
+        return {
+            k: v.to(self.device, non_blocking=True)
+            for k, v in batch.items()
+            if isinstance(v, torch.Tensor)
+        }
+
+    def _current_lr(self) -> float:
+        return self.optimizer.param_groups[0]["lr"]
 
     def train_epoch(self, dataloader: DataLoader, epoch: int) -> float:
         self.model.train()  # type: ignore[assignment]
@@ -105,7 +119,13 @@ class Trainer:
         avg_loss = total_loss / n_batches
 
         if self.use_wandb:
-            self.wandb.log({"train_loss": avg_loss}, step=epoch)
+            self.wandb.log(
+                {
+                    "train/loss": avg_loss,
+                    "train/lr": self._current_lr(),
+                    "epoch": epoch,
+                }
+            )
         return avg_loss
 
     @torch.no_grad()
@@ -113,6 +133,11 @@ class Trainer:
         self.model.eval()  # type: ignore[assignment]
         total_loss = 0.0
         n_batches = len(dataloader)
+        metrics = SegmentationMetrics(
+            num_classes=self.num_classes,
+            background_index=0,
+            device=self.device,
+        )
         pbar = tqdm(enumerate(dataloader), total=n_batches, desc=f"Validate {epoch}")
         for batch_idx, batch in pbar:
             batch = self._batch_to_device(batch)
@@ -124,11 +149,36 @@ class Trainer:
                 outputs = self.model(images)
                 loss = self.criterion(outputs, masks)
             total_loss += loss.item()
+            metrics.update(outputs, masks)
             pbar.set_postfix({"val_loss": total_loss / (batch_idx + 1)})
+
         avg_loss = total_loss / n_batches
+        mean_iou = metrics.mean_iou(exclude_background=True)
+        mean_dice = metrics.mean_dice(exclude_background=True)
+        pixel_acc = metrics.pixel_accuracy()
+        per_class_iou = metrics.per_class_iou().cpu().tolist()
+        per_class_dice = metrics.per_class_dice().cpu().tolist()
+
+        print(
+            f"  val_loss={avg_loss:.4f}  mIoU={mean_iou:.4f}"
+            f"  mDice={mean_dice:.4f}  px_acc={pixel_acc:.4f}"
+        )
 
         if self.use_wandb:
-            self.wandb.log({"val_loss": avg_loss}, step=epoch)
+            log_dict: dict = {
+                "val/loss": avg_loss,
+                "val/mean_iou": mean_iou,
+                "val/mean_dice": mean_dice,
+                "val/pixel_accuracy": pixel_acc,
+                "epoch": epoch,
+            }
+            for i, (iou, dice) in enumerate(
+                zip(per_class_iou, per_class_dice, strict=False)
+            ):
+                log_dict[f"val/iou_class_{i}"] = iou
+                log_dict[f"val/dice_class_{i}"] = dice
+
+            self.wandb.log(log_dict)
         return avg_loss
 
     def fit(self, train_loader: DataLoader, val_loader: DataLoader) -> None:
@@ -167,3 +217,5 @@ class Trainer:
                 config_name=config_name,
                 is_best=is_best,
             )
+        if self.use_wandb and self.wandb.run is not None:
+            self.wandb.finish()
