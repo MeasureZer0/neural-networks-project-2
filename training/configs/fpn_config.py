@@ -1,19 +1,11 @@
-<<<<<<< feat/optuna
 from dataclasses import dataclass, field
 from typing import List
-=======
-from dataclasses import dataclass
->>>>>>> main
 
 from training.configs.baseline import BaselineConfig
 
 
 @dataclass
-<<<<<<< feat/optuna
 class FPNConfig(BaselineConfig):
-=======
-class Config(BaselineConfig):
->>>>>>> main
     name: str = "fpn_baseline"
     model: str = "fpn"
     pretrained: bool = True
@@ -28,10 +20,7 @@ class Config(BaselineConfig):
     warmup_epochs: int = 2
     compile_model: bool = True
     channels_last: bool = True
-<<<<<<< feat/optuna
     use_wandb: bool = True
     wandb_project: str = "semantic-segmentation"
     wandb_group: str = "baselines"
     wandb_tags: List[str] = field(default_factory=lambda: ["baseline", "fpn"])
-=======
->>>>>>> main

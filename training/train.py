@@ -56,7 +56,6 @@ def get_config(config_name: str, variant_name: str | None = None) -> BaselineCon
         module = importlib.import_module(module_name)
 
         if variant_name:
-<<<<<<< feat/optuna
             possible_names = [
                 variant_name,
                 f"{variant_name}Config",
@@ -70,16 +69,6 @@ def get_config(config_name: str, variant_name: str | None = None) -> BaselineCon
                     and cls is not BaselineConfig
                 ):
                     return cls()
-=======
-            variant_cls_name = f"{config_name.capitalize()}{variant_name.capitalize()}"
-            if hasattr(module, variant_cls_name):
-                variant_cls = getattr(module, variant_cls_name)
-                if isinstance(variant_cls, type) and issubclass(
-                    variant_cls, BaselineConfig
-                ):
-                    return variant_cls()
-
->>>>>>> main
         if hasattr(module, "Config"):
             c = module.Config
             return c() if inspect.isclass(c) else c

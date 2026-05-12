@@ -24,27 +24,16 @@ class SegmentationMetrics:
             (num_classes, num_classes), dtype=torch.int64, device=device
         )
 
-<<<<<<< feat/optuna
     def reset(self) -> None:
         self.confusion.zero_()
 
-=======
->>>>>>> main
     def _prepare_labels(self, logits: Tensor, labels: Tensor) -> tuple[Tensor, Tensor]:
         """
         logits: [B, C, H, W]
         labels: [B, H, W] (int) or [B, C, H, W] (one-hot)
         """
-<<<<<<< feat/optuna
         preds = torch.argmax(logits, dim=1)  # [B, H, W]
 
-=======
-
-        # Convert logits to predicted class indices
-        preds = torch.argmax(logits, dim=1)  # [B, H, W]
-
-        # Convert one-hot labels to integer labels if needed
->>>>>>> main
         if labels.ndim == 4:
             labels = torch.argmax(labels, dim=1)
 
@@ -54,18 +43,9 @@ class SegmentationMetrics:
     def update(self, logits: Tensor, labels: Tensor) -> None:
         preds, labels = self._prepare_labels(logits, labels)
 
-<<<<<<< feat/optuna
         preds = preds.view(-1)
         labels = labels.view(-1)
 
-=======
-        # Flatten
-        preds = preds.view(-1)
-        labels = labels.view(-1)
-
-        # Compute confusion matrix for this batch
-
->>>>>>> main
         indices = self.num_classes * labels + preds
         batch_confusion = torch.bincount(
             indices, minlength=self.num_classes**2
@@ -119,33 +99,19 @@ def full_segmentation_eval(
     background_index: Optional[int] = None,
     use_fp16: bool = False,
 ) -> Tuple[
-<<<<<<< feat/optuna
     Dict[str, float],
     Dict[str, List[float]],
 ]:
-=======
-    Dict[str, float],  # overall results
-    Dict[str, List[float]],  # per-class results
-]:
-
->>>>>>> main
     model.eval()
     metrics = SegmentationMetrics(
         num_classes=num_classes, background_index=background_index, device=device
     )
 
     for batch in dataloader:
-<<<<<<< feat/optuna
         images = batch["image"].to(device)
         labels = batch["mask"].to(device)
 
         with torch.autocast(device_type=device, enabled=use_fp16):
-=======
-        images = batch["images"].to(device)
-        labels = batch["labels"].to(device)
-
-        with torch.cuda.amp.autocast(enabled=use_fp16):
->>>>>>> main
             logits = model(images)
 
         metrics.update(logits, labels)

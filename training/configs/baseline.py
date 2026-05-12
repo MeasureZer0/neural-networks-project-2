@@ -1,10 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-<<<<<<< feat/optuna
 from typing import List, Optional
-=======
-from typing import Optional
->>>>>>> main
 
 
 @dataclass
@@ -58,13 +54,7 @@ class BaselineConfig:
 
     checkpoint_dir: str = "checkpoints"
 
-<<<<<<< feat/optuna
     use_wandb: bool = True
     wandb_project: str = "semantic-segmentation"
     wandb_entity: Optional[str] = None
     wandb_tags: List[str] = field(default_factory=list)
-=======
-    use_wandb: bool = False
-    wandb_project: str = "semantic-segmentation"
-    wandb_entity: Optional[str] = None
->>>>>>> main

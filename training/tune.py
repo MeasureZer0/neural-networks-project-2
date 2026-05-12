@@ -5,11 +5,11 @@ from pathlib import Path
 
 import optuna  # type: ignore[no-redef]
 import torch
+import wandb
 from optuna.integration.wandb import WeightsAndBiasesCallback  # type: ignore[no-redef]
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
-import wandb
 from models.deeplabv3_model import DeepLabV3
 from models.FPN import FPNSegmentation
 from models.UNet import UNet
