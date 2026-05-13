@@ -39,8 +39,15 @@ from models.UNet_variants import (
     UNetShallow,
     UNetWide,
 )
-from torch_datasets.landcover_dataset import LandcoverDataset
-from torch_datasets.transforms import ValTransform, train_transform_from_config
+from torch_datasets.landcover_dataset import (
+    LandcoverDataset,
+    UnlabeledLandcoverDataset,
+)
+from torch_datasets.transforms import (
+    SSLTransform,
+    ValTransform,
+    train_transform_from_config,
+)
 from training.checkpointing import load_checkpoint
 from training.configs.baseline import BaselineConfig
 from training.loss import CEDiceLoss, CELoss, DiceLoss, FocalLoss
@@ -287,6 +294,52 @@ def main() -> None:
         persistent_workers=persistent_workers,
     )
 
+    unlabeled_loader = None
+    semi_supervised = getattr(config, "semi_supervised", None)
+    if getattr(semi_supervised, "enabled", False):
+        unlabeled_split_file = getattr(semi_supervised, "unlabeled_split_file", None)
+        if unlabeled_split_file is None:
+            raise ValueError(
+                "semi_supervised.unlabeled_split_file must be set when SSL is enabled."
+            )
+
+        unlabeled_dataset = UnlabeledLandcoverDataset.from_split_file(
+            split_file=unlabeled_split_file,
+            image_dir=config.data_dir,
+            transform=SSLTransform(
+                use_dual_strong_views=getattr(
+                    semi_supervised, "use_dual_strong_views", False
+                )
+            ),
+        )
+
+        extra_unlabeled_split_file = getattr(
+            semi_supervised, "extra_unlabeled_split_file", None
+        )
+        if extra_unlabeled_split_file is not None:
+            extra_dataset = UnlabeledLandcoverDataset.from_split_file(
+                split_file=extra_unlabeled_split_file,
+                image_dir=None,
+                transform=SSLTransform(
+                    use_dual_strong_views=getattr(
+                        semi_supervised, "use_dual_strong_views", False
+                    )
+                ),
+            )
+            unlabeled_dataset = torch.utils.data.ConcatDataset(
+                [unlabeled_dataset, extra_dataset]
+            )
+
+        unlabeled_loader = DataLoader(
+            unlabeled_dataset,
+            batch_size=config.batch_size,
+            shuffle=True,
+            num_workers=config.num_workers,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            drop_last=True,
+        )
+
     scheduler = None
     if getattr(config, "use_cosine_schedule", False):
         steps_per_epoch = len(train_loader)
@@ -321,7 +374,7 @@ def main() -> None:
         config=config,
         start_epoch=start_epoch,
     )
-    trainer.fit(train_loader, val_loader)
+    trainer.fit(train_loader, val_loader, unlabeled_loader=unlabeled_loader)
 
 
 if __name__ == "__main__":
