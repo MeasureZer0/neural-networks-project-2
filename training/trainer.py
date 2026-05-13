@@ -108,12 +108,16 @@ class Trainer:
         decay = min(1 - 1 / (self.global_step + 1), max_decay)
 
         for teacher_param, student_param in zip(
-            self.teacher.parameters(), self.model.parameters(), strict=False
+            self.teacher.parameters(),
+            self.model.parameters(),  # pyright: ignore[reportFunctionMemberAccess]
+            strict=False,
         ):
             teacher_param.data.mul_(decay).add_(student_param.data, alpha=1 - decay)
 
         for teacher_buffer, student_buffer in zip(
-            self.teacher.buffers(), self.model.buffers(), strict=False
+            self.teacher.buffers(),
+            self.model.buffers(),  # pyright: ignore[reportFunctionMemberAccess]
+            strict=False,
         ):
             teacher_buffer.copy_(student_buffer)
 
@@ -263,7 +267,7 @@ class Trainer:
             }
             if pseudo_hist is not None:
                 log_payload["train/pseudo_class_histogram"] = self.wandb.Histogram(
-                    pseudo_hist.detach().cpu().numpy()
+                    pseudo_hist.detach().cpu().numpy()  # pyright: ignore[reportArgumentType]
                 )
             self.wandb.log(log_payload)
         return metrics
