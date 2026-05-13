@@ -40,7 +40,7 @@ from models.UNet_variants import (
     UNetWide,
 )
 from torch_datasets.landcover_dataset import LandcoverDataset
-from torch_datasets.transforms import TrainTransform, ValTransform
+from torch_datasets.transforms import ValTransform, train_transform_from_config
 from training.checkpointing import load_checkpoint
 from training.configs.baseline import BaselineConfig
 from training.loss import CEDiceLoss, CELoss, DiceLoss, FocalLoss
@@ -258,7 +258,7 @@ def main() -> None:
     train_dataset = LandcoverDataset(
         image_dir=config.data_dir,
         split_file=config.train_split_file,
-        transform=TrainTransform(),
+        transform=train_transform_from_config(config),
     )
     val_dataset = LandcoverDataset(
         image_dir=config.data_dir,

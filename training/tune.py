@@ -14,7 +14,7 @@ from models.deeplabv3_model import DeepLabV3
 from models.FPN import FPNSegmentation
 from models.UNet import UNet
 from torch_datasets.landcover_dataset import LandcoverDataset
-from torch_datasets.transforms import TrainTransform, ValTransform
+from torch_datasets.transforms import ValTransform, train_transform_from_config
 from training.configs.baseline import BaselineConfig
 from training.loss import CELoss, DiceLoss, FocalLoss
 from training.metrics import SegmentationMetrics
@@ -226,7 +226,9 @@ def make_loader(
         LandcoverDataset(
             image_dir=config.data_dir,
             split_file=split_file,
-            transform=TrainTransform() if shuffle else ValTransform(),
+            transform=train_transform_from_config(config)
+            if shuffle
+            else ValTransform(),
         ),
         batch_size=config.batch_size,
         shuffle=shuffle,
