@@ -7,7 +7,7 @@ from training.configs.baseline import BaselineConfig
 @dataclass
 class _AugAblationBase(BaselineConfig):
     model: str = "deeplabv3"
-    pretrained: bool = False
+    pretrained: bool = True
     num_classes: int = 5
     lr: float = 1e-4
     weight_decay: float = 1e-4
