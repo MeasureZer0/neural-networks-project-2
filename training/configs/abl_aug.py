@@ -6,16 +6,15 @@ from training.configs.baseline import BaselineConfig
 
 @dataclass
 class _AugAblationBase(BaselineConfig):
-    model: str = "unet"
+    model: str = "deeplabv3"
     pretrained: bool = False
     num_classes: int = 5
-    loss: str = "dice"
-    lr: float = 3e-4
+    lr: float = 1e-4
     weight_decay: float = 1e-4
-    num_epochs: int = 12  # ~40% of 30 — wystarczy do porównania
+    num_epochs: int = 12
     batch_size: int = 8
     use_cosine_schedule: bool = True
-    warmup_epochs: int = 2
+    warmup_epochs: int = 1
     compile_model: bool = True
     channels_last: bool = True
     use_wandb: bool = True

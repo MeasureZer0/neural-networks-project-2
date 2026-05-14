@@ -11,7 +11,7 @@ class DeepLabV3FrozenConfig(BaselineConfig):
     pretrained: bool = True
     freeze_backbone: bool = True
     num_classes: int = 5
-    loss: str = "dice"
+    loss: str = "ce_dice"
     lr: float = 1e-3
     weight_decay: float = 1e-4
     num_epochs: int = 30
