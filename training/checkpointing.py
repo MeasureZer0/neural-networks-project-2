@@ -1,12 +1,15 @@
 import pathlib
 import pickle
 from os import PathLike, makedirs, path
+from typing import Any
 
 import torch
 import torch.nn as nn
 from torch.amp.grad_scaler import GradScaler
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
+
+StateDict = dict[str, Any]
 
 
 class _CheckpointCompatUnpickler(pickle.Unpickler):
@@ -49,6 +52,39 @@ def load_checkpoint_file(checkpoint_path: str | PathLike[str]) -> dict[str, obje
     )
 
 
+def _require_state_dict(checkpoint: dict[str, object], key: str) -> StateDict:
+    state_dict = checkpoint.get(key)
+    if not isinstance(state_dict, dict):
+        raise TypeError(f"Checkpoint field {key!r} must be a state dict.")
+    return state_dict
+
+
+def _require_tensor_state_dict(
+    checkpoint: dict[str, object], key: str
+) -> dict[str, torch.Tensor]:
+    state_dict = _require_state_dict(checkpoint, key)
+    if not all(
+        isinstance(param_name, str) and isinstance(param_value, torch.Tensor)
+        for param_name, param_value in state_dict.items()
+    ):
+        raise TypeError(f"Checkpoint field {key!r} must map strings to tensors.")
+    return state_dict
+
+
+def _require_int(checkpoint: dict[str, object], key: str) -> int:
+    value = checkpoint.get(key)
+    if not isinstance(value, int):
+        raise TypeError(f"Checkpoint field {key!r} must be an int.")
+    return value
+
+
+def _require_float(checkpoint: dict[str, object], key: str) -> float:
+    value = checkpoint.get(key)
+    if isinstance(value, int | float):
+        return float(value)
+    raise TypeError(f"Checkpoint field {key!r} must be a float.")
+
+
 def save_checkpoint(
     state: dict[str, object],
     checkpoint_dir: str | PathLike[str],
@@ -83,15 +119,17 @@ def load_checkpoint(
 
     checkpoint = load_checkpoint_file(checkpoint_path)
 
-    model.load_state_dict(normalize_state_dict_keys(checkpoint["model_state_dict"]))
+    model.load_state_dict(
+        normalize_state_dict_keys(_require_tensor_state_dict(checkpoint, "model_state_dict"))
+    )
 
     if optimizer and "optimizer_state_dict" in checkpoint:
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        optimizer.load_state_dict(_require_state_dict(checkpoint, "optimizer_state_dict"))
 
     if scheduler and "scheduler_state_dict" in checkpoint:
-        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+        scheduler.load_state_dict(_require_state_dict(checkpoint, "scheduler_state_dict"))
 
     if scaler and "scaler_state_dict" in checkpoint:
-        scaler.load_state_dict(checkpoint["scaler_state_dict"])
+        scaler.load_state_dict(_require_state_dict(checkpoint, "scaler_state_dict"))
 
-    return checkpoint["epoch"], checkpoint["val_loss"]
+    return _require_int(checkpoint, "epoch"), _require_float(checkpoint, "val_loss")
