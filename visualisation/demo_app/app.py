@@ -4,7 +4,7 @@ from pathlib import Path
 
 from flask import Flask, render_template, request
 
-from visualisation.demo_app.inference import load_model, run_inference
+from visualisation.demo_app.inference import LoadedModel, load_model, run_inference
 from visualisation.demo_app.landcover import (
     discover_checkpoints,
     index_samples,
@@ -30,7 +30,7 @@ def _default_checkpoint(checkpoints: list) -> str:
     return checkpoints[0].path
 
 
-def _get_loaded_model(checkpoint_path: str, device: str):
+def _get_loaded_model(checkpoint_path: str, device: str) -> LoadedModel:
     cache_key = (checkpoint_path, device)
     if cache_key not in _MODEL_CACHE:
         _MODEL_CACHE[cache_key] = load_model(checkpoint_path, requested_device=device)
@@ -38,7 +38,7 @@ def _get_loaded_model(checkpoint_path: str, device: str):
 
 
 @app.route("/", methods=["GET", "POST"])
-def index():
+def index() -> str:
     checkpoints = discover_checkpoints(CHECKPOINT_DIR)
     samples = load_split_samples(IMAGE_DIR, TRAIN_SPLIT)
     sample_index = index_samples(samples)
