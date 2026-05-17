@@ -31,9 +31,14 @@ class FPNNoLateral_Module(FPN):
 
 
 class FPNNoLateral(nn.Module):
-    def __init__(self, num_classes: int = 5, out_channels: int = 256) -> None:
+    def __init__(
+        self,
+        num_classes: int = 5,
+        out_channels: int = 256,
+        pretrained: bool = True,
+    ) -> None:
         super().__init__()
-        self.fpn = FPNNoLateral_Module(out_channels)
+        self.fpn = FPNNoLateral_Module(out_channels, pretrained=pretrained)
         self.head = SegmentationHead(out_channels, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -45,9 +50,14 @@ class FPNSingleScale(nn.Module):
     Ablation Study: Segmentation head uses only P2 features.
     """
 
-    def __init__(self, num_classes: int = 5, out_channels: int = 256) -> None:
+    def __init__(
+        self,
+        num_classes: int = 5,
+        out_channels: int = 256,
+        pretrained: bool = True,
+    ) -> None:
         super().__init__()
-        self.fpn = FPN(out_channels)
+        self.fpn = FPN(out_channels, pretrained=pretrained)
         self.head = SegmentationHead(out_channels, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -65,9 +75,14 @@ class FPNSumMerge(nn.Module):
     Ablation Study: model using summation for merging.
     """
 
-    def __init__(self, num_classes: int = 5, out_channels: int = 256) -> None:
+    def __init__(
+        self,
+        num_classes: int = 5,
+        out_channels: int = 256,
+        pretrained: bool = True,
+    ) -> None:
         super().__init__()
-        self.fpn = FPN(out_channels)
+        self.fpn = FPN(out_channels, pretrained=pretrained)
         self.head = SegmentationHead(out_channels, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -80,9 +95,14 @@ class FPNConcatMerge(nn.Module):
     Ablation Study: Concatenation instead of Summation in the head.
     """
 
-    def __init__(self, num_classes: int = 5, out_channels: int = 256) -> None:
+    def __init__(
+        self,
+        num_classes: int = 5,
+        out_channels: int = 256,
+        pretrained: bool = True,
+    ) -> None:
         super().__init__()
-        self.fpn = FPN(out_channels)
+        self.fpn = FPN(out_channels, pretrained=pretrained)
         self.head = SegmentationHead(out_channels, num_classes)
         self.head.conv_block[0] = nn.Conv2d(
             out_channels * 4, out_channels, kernel_size=3, padding=1, bias=False
@@ -116,9 +136,14 @@ class FPNShallowHead(nn.Module):
     Ablation Study: Simplified head.
     """
 
-    def __init__(self, num_classes: int = 5, out_channels: int = 256) -> None:
+    def __init__(
+        self,
+        num_classes: int = 5,
+        out_channels: int = 256,
+        pretrained: bool = True,
+    ) -> None:
         super().__init__()
-        self.fpn = FPN(out_channels)
+        self.fpn = FPN(out_channels, pretrained=pretrained)
         self.head = SegmentationHead(out_channels, num_classes)
         self.head.conv_block = nn.Sequential(
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
@@ -135,9 +160,14 @@ class FPNDeepHead(nn.Module):
     Ablation Study: Deeper segmentation head.
     """
 
-    def __init__(self, num_classes: int = 5, out_channels: int = 256) -> None:
+    def __init__(
+        self,
+        num_classes: int = 5,
+        out_channels: int = 256,
+        pretrained: bool = True,
+    ) -> None:
         super().__init__()
-        self.fpn = FPN(out_channels)
+        self.fpn = FPN(out_channels, pretrained=pretrained)
         self.head = SegmentationHead(out_channels, num_classes)
 
         layers = []
@@ -180,9 +210,14 @@ class FPNNoP5_Module(FPN):
 
 
 class FPNNoP5(nn.Module):
-    def __init__(self, num_classes: int = 5, out_channels: int = 256) -> None:
+    def __init__(
+        self,
+        num_classes: int = 5,
+        out_channels: int = 256,
+        pretrained: bool = True,
+    ) -> None:
         super().__init__()
-        self.fpn = FPNNoP5_Module(out_channels)
+        self.fpn = FPNNoP5_Module(out_channels, pretrained=pretrained)
         self.head = SegmentationHead(out_channels, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

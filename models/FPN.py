@@ -112,9 +112,14 @@ class SegmentationHead(nn.Module):
 
 
 class FPNSegmentation(nn.Module):
-    def __init__(self, num_classes: int = 5, out_channels: int = 256) -> None:
+    def __init__(
+        self,
+        num_classes: int = 5,
+        out_channels: int = 256,
+        pretrained: bool = True,
+    ) -> None:
         super().__init__()
-        self.fpn = FPN(out_channels)
+        self.fpn = FPN(out_channels, pretrained=pretrained)
         self.head = SegmentationHead(out_channels, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
