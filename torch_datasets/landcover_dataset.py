@@ -91,7 +91,9 @@ class UnlabeledLandcoverDataset(Dataset):
         if path.suffix:
             return path
         if self.image_dir is None:
-            raise ValueError("image_dir is required when unlabeled split entries are ids.")
+            raise ValueError(
+                "image_dir is required when unlabeled split entries are ids."
+            )
         return self.image_dir / f"{path}.jpg"
 
     def __len__(self) -> int:
