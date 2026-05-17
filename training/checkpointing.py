@@ -1,4 +1,6 @@
 import os
+import pickle
+import pathlib
 from typing import Any, Optional, Union
 
 import torch
@@ -6,6 +8,46 @@ import torch.nn as nn
 from torch.amp.grad_scaler import GradScaler
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
+
+
+class _CheckpointCompatUnpickler(pickle.Unpickler):
+    def find_class(self, module: str, name: str) -> Any:
+        if module in {"pathlib", "pathlib._local"} and name == "WindowsPath":
+            return pathlib.PureWindowsPath
+        if module in {"pathlib", "pathlib._local"} and name == "PosixPath":
+            return pathlib.PurePosixPath
+        return super().find_class(module, name)
+
+
+class _CheckpointCompatPickle:
+    Unpickler = _CheckpointCompatUnpickler
+    load = pickle.load
+    loads = pickle.loads
+    dump = pickle.dump
+    dumps = pickle.dumps
+
+
+def normalize_state_dict_keys(
+    state_dict: dict[str, torch.Tensor],
+) -> dict[str, torch.Tensor]:
+    normalized: dict[str, torch.Tensor] = {}
+    for key, value in state_dict.items():
+        cleaned = key
+        if cleaned.startswith("_orig_mod."):
+            cleaned = cleaned.removeprefix("_orig_mod.")
+        if cleaned.startswith("module."):
+            cleaned = cleaned.removeprefix("module.")
+        normalized[cleaned] = value
+    return normalized
+
+
+def load_checkpoint_file(checkpoint_path: Union[str, os.PathLike]) -> dict[str, Any]:
+    return torch.load(
+        checkpoint_path,
+        map_location="cpu",
+        weights_only=False,
+        pickle_module=_CheckpointCompatPickle,
+    )
 
 
 def save_checkpoint(
@@ -40,9 +82,9 @@ def load_checkpoint(
     if not os.path.isfile(checkpoint_path):
         raise FileNotFoundError(f"No checkpoint found at {checkpoint_path}")
 
-    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    checkpoint = load_checkpoint_file(checkpoint_path)
 
-    model.load_state_dict(checkpoint["model_state_dict"])
+    model.load_state_dict(normalize_state_dict_keys(checkpoint["model_state_dict"]))
 
     if optimizer and "optimizer_state_dict" in checkpoint:
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])

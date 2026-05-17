@@ -44,6 +44,7 @@ from models.UNet_variants import (
     UNetShallow,
     UNetWide,
 )
+from training.checkpointing import load_checkpoint_file, normalize_state_dict_keys
 from training.configs.baseline import BaselineConfig
 from training.metrics import SegmentationMetrics
 from visualisation.demo_app.landcover import LANDCOVER_CLASS_NAMES
@@ -157,24 +158,12 @@ def build_model_from_config(config: BaselineConfig) -> nn.Module:
     raise ValueError(f"Unsupported model type: {model_name!r}")
 
 
-def normalize_state_dict_keys(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-    normalized: dict[str, torch.Tensor] = {}
-    for key, value in state_dict.items():
-        cleaned = key
-        if cleaned.startswith("_orig_mod."):
-            cleaned = cleaned.removeprefix("_orig_mod.")
-        if cleaned.startswith("module."):
-            cleaned = cleaned.removeprefix("module.")
-        normalized[cleaned] = value
-    return normalized
-
-
 def load_model(checkpoint_path: str | Path, requested_device: str = "auto") -> LoadedModel:
     path = Path(checkpoint_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Checkpoint not found: {path}")
 
-    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    checkpoint = load_checkpoint_file(path)
     config = checkpoint.get("config", BaselineConfig())
     if not isinstance(config, BaselineConfig):
         raise TypeError("Checkpoint config is not a BaselineConfig instance.")
