@@ -12,7 +12,7 @@ class SemiSupervisedConfig:
     threshold: float = 0.95
     lambda_u: float = 1.0
     unsup_warmup_epochs: int = 5
-    use_ema_teacher: bool = False
+    use_ema_teacher: bool = True
     ema_decay: float = 0.996
     use_dual_strong_views: bool = False
 

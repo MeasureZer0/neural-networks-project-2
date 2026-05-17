@@ -43,7 +43,7 @@ That means the structure already supports:
 - Weak and strong augmentations for unlabeled data
 - Confidence masking with threshold `0.95` by default
 - Supervised loss plus unsupervised consistency loss
-- Optional EMA teacher mode
+- EMA teacher-student mode enabled by default
 - Resume support for `global_step`, scaler state, and EMA teacher weights
 
 ## Augmentation details
@@ -73,6 +73,25 @@ Strong view:
 - `ToTensorV2()`
 
 This is a lighter strong augmentation than the one used in the original FixMatch paper, but it is the augmentation stack currently implemented in the repo.
+
+## Teacher-student default
+
+Semi-supervised training now uses an EMA teacher by default.
+
+That means:
+
+- the student model is optimized by gradient descent
+- the teacher model is updated as an exponential moving average of the student
+- pseudo-labels for unlabeled images are produced from the teacher on the weak view
+- the student is trained to match those pseudo-labels on the strong view
+
+Why this is the default in this repo:
+
+- it gives a cleaner teacher-student setup for semi-supervised experiments
+- teacher predictions are typically more stable than raw student predictions early in training
+- the codebase now persists and restores teacher state, so resumed runs remain consistent
+
+This is a deliberate choice for the repo default. It is closer to a teacher-student SSL variant than to the minimal FixMatch baseline from the paper. If you want paper-closer behavior, set `use_ema_teacher=False` in `SemiSupervisedConfig`.
 
 ## Training recipe
 
@@ -154,7 +173,7 @@ class FixMatchFPNConfig(BaselineConfig):
             threshold=0.95,
             lambda_u=1.0,
             unsup_warmup_epochs=5,
-            use_ema_teacher=False,
+            use_ema_teacher=True,
         )
     )
 ```
@@ -185,4 +204,4 @@ uv run python -m training.train --config your_fixmatch_config
 
 - Augmentations are intentionally left as currently implemented in `torch_datasets/transforms.py`.
 - This is a segmentation adaptation of FixMatch, so pseudo-labeling is done per pixel rather than per image.
-- EMA teacher mode is optional and disabled by default.
+- EMA teacher mode is enabled by default and can be disabled per config.

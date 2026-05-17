@@ -36,6 +36,6 @@ class UNetFixMatchConfig(BaselineConfig):
             threshold=0.95,
             lambda_u=1.0,
             unsup_warmup_epochs=5,
-            use_ema_teacher=False,
+            use_ema_teacher=True,
         )
     )
