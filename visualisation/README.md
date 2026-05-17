@@ -20,7 +20,7 @@ uv run python visualisation/app.py
 
 - discovers available `.pth` checkpoints from `checkpoints/`
 - rebuilds the saved model architecture from checkpoint config metadata
-- lets you pick a LandCover training tile from `data/landcover.ai.v1/train.txt`
+- lets you pick a LandCover test tile from `data/landcover.ai.v1/test.txt`
 - loads the paired image and mask from `data/landcover.ai.v1/output/`
 - renders the predicted mask, overlay, class coverage, and per-image metrics
 - still supports custom image uploads, with an optional custom mask

@@ -1,7 +1,6 @@
-import os
-import pickle
 import pathlib
-from typing import Any, Optional, Union
+import pickle
+from os import PathLike, makedirs, path
 
 import torch
 import torch.nn as nn
@@ -11,7 +10,7 @@ from torch.optim.lr_scheduler import LRScheduler
 
 
 class _CheckpointCompatUnpickler(pickle.Unpickler):
-    def find_class(self, module: str, name: str) -> Any:
+    def find_class(self, module: str, name: str) -> object:
         if module in {"pathlib", "pathlib._local"} and name == "WindowsPath":
             return pathlib.PureWindowsPath
         if module in {"pathlib", "pathlib._local"} and name == "PosixPath":
@@ -41,7 +40,7 @@ def normalize_state_dict_keys(
     return normalized
 
 
-def load_checkpoint_file(checkpoint_path: Union[str, os.PathLike]) -> dict[str, Any]:
+def load_checkpoint_file(checkpoint_path: str | PathLike[str]) -> dict[str, object]:
     return torch.load(
         checkpoint_path,
         map_location="cpu",
@@ -51,35 +50,35 @@ def load_checkpoint_file(checkpoint_path: Union[str, os.PathLike]) -> dict[str, 
 
 
 def save_checkpoint(
-    state: dict[str, Any],
-    checkpoint_dir: Union[str, os.PathLike],
+    state: dict[str, object],
+    checkpoint_dir: str | PathLike[str],
     config_name: str = "baseline_config",
-    filename: Optional[str] = None,
+    filename: str | None = None,
     is_best: bool = False,
 ) -> None:
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    makedirs(checkpoint_dir, exist_ok=True)
 
     if filename is None:
         epoch = state.get("epoch", 0)
         filename = f"{config_name}_epoch_{epoch}.pth"
 
-    filepath = os.path.join(checkpoint_dir, filename)
+    filepath = path.join(checkpoint_dir, filename)
     torch.save(state, filepath)
 
     if is_best:
-        best_path = os.path.join(checkpoint_dir, f"{config_name}_best.pth")
+        best_path = path.join(checkpoint_dir, f"{config_name}_best.pth")
         torch.save(state, best_path)
         print(f"New best model saved: {best_path}")
 
 
 def load_checkpoint(
-    checkpoint_path: Union[str, os.PathLike],
+    checkpoint_path: str | PathLike[str],
     model: nn.Module,
-    optimizer: Optional[Optimizer] = None,
-    scheduler: Optional[LRScheduler] = None,
-    scaler: Optional[GradScaler] = None,
+    optimizer: Optimizer | None = None,
+    scheduler: LRScheduler | None = None,
+    scaler: GradScaler | None = None,
 ) -> tuple[int, float]:
-    if not os.path.isfile(checkpoint_path):
+    if not path.isfile(checkpoint_path):
         raise FileNotFoundError(f"No checkpoint found at {checkpoint_path}")
 
     checkpoint = load_checkpoint_file(checkpoint_path)

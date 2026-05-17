@@ -21,7 +21,7 @@ DATA_ROOT = (
     Path("/Users/jan/Desktop/Programowanie/pwr/semestr_5/nn-2/data/landcover.ai.v1")
 ).resolve()
 IMAGE_DIR = DATA_ROOT / "output"
-TRAIN_SPLIT = DATA_ROOT / "train.txt"
+TEST_SPLIT = DATA_ROOT / "test.txt"
 
 
 def _default_checkpoint(checkpoints: list) -> str:
@@ -40,7 +40,7 @@ def _get_loaded_model(checkpoint_path: str, device: str) -> LoadedModel:
 @app.route("/", methods=["GET", "POST"])
 def index() -> str:
     checkpoints = discover_checkpoints(CHECKPOINT_DIR)
-    samples = load_split_samples(IMAGE_DIR, TRAIN_SPLIT)
+    samples = load_split_samples(IMAGE_DIR, TEST_SPLIT)
     sample_index = index_samples(samples)
 
     context = {

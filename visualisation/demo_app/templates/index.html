@@ -21,7 +21,7 @@
         <p class="eyebrow">Flask Demo</p>
         <h1>Interactive Semantic Segmentation Showcase</h1>
         <p class="lede">
-          Pick a trained checkpoint from this repo, run it on a LandCover train
+          Pick a trained checkpoint from this repo, run it on a LandCover test
           chip with its paired mask, or switch to a custom upload and inspect
           the predicted mask, overlay, and per-image metrics.
         </p>
@@ -57,7 +57,7 @@
           </label>
 
           <label class="field field-wide">
-            <span>LandCover train sample</span>
+            <span>LandCover test sample</span>
             <select name="sample_id">
               <option value="">Custom upload instead</option>
               {% for sample in sample_options %}
@@ -67,7 +67,7 @@
               {% endfor %}
             </select>
             <small class="field-note">
-              Loaded from `train.txt` and matched to `output/&lt;sample&gt;.jpg` plus `output/&lt;sample&gt;_m.png`.
+              Loaded from `test.txt` and matched to `output/&lt;sample&gt;.jpg` plus `output/&lt;sample&gt;_m.png`.
               {{ sample_count }} samples available.
             </small>
           </label>
