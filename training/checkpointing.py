@@ -36,7 +36,7 @@ def load_checkpoint(
     optimizer: Optional[Optimizer] = None,
     scheduler: Optional[LRScheduler] = None,
     scaler: Optional[GradScaler] = None,
-) -> tuple[int, float]:
+) -> dict[str, Any]:
     if not os.path.isfile(checkpoint_path):
         raise FileNotFoundError(f"No checkpoint found at {checkpoint_path}")
 
@@ -53,4 +53,4 @@ def load_checkpoint(
     if scaler and "scaler_state_dict" in checkpoint:
         scaler.load_state_dict(checkpoint["scaler_state_dict"])
 
-    return checkpoint["epoch"], checkpoint["val_loss"]
+    return checkpoint

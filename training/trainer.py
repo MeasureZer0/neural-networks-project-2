@@ -1,7 +1,7 @@
 import os
 from copy import deepcopy
 from itertools import cycle
-from typing import Optional
+from typing import Any, Optional
 
 import torch
 import torch.nn as nn
@@ -57,9 +57,12 @@ class Trainer:
 
         self.semi_supervised = getattr(config, "semi_supervised", None)
         self.use_ssl = getattr(self.semi_supervised, "enabled", False)
+        self.use_ema_teacher = self.use_ssl and getattr(
+            self.semi_supervised, "use_ema_teacher", False
+        )
         self.teacher: nn.Module | None = None
         self.global_step = 0
-        if self.use_ssl:
+        if self.use_ema_teacher:
             self.teacher = deepcopy(self.model)
             self.teacher.eval()
             for param in self.teacher.parameters():
@@ -87,6 +90,14 @@ class Trainer:
                     tags=getattr(config, "wandb_tags", None) or [],
                     config=vars(config),
                 )
+
+    def restore_checkpoint_state(self, checkpoint: dict[str, Any]) -> None:
+        if "scaler_state_dict" in checkpoint:
+            self.scaler.load_state_dict(checkpoint["scaler_state_dict"])
+        self.global_step = int(checkpoint.get("global_step", 0))
+        teacher_state_dict = checkpoint.get("teacher_state_dict")
+        if self.teacher is not None and teacher_state_dict is not None:
+            self.teacher.load_state_dict(teacher_state_dict)
 
     def _batch_to_device(
         self, batch: dict[str, torch.Tensor]
@@ -135,9 +146,6 @@ class Trainer:
     def unsupervised_loss(
         self, unlabeled_batch: dict[str, torch.Tensor | list[str]]
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        if self.teacher is None:
-            raise RuntimeError("SSL teacher is not initialized.")
-
         image_weak = unlabeled_batch["image_weak"]
         if not torch.is_tensor(image_weak):
             raise TypeError("image_weak must be a tensor.")
@@ -148,7 +156,8 @@ class Trainer:
         )  # type: ignore[assignment]
 
         with torch.no_grad():
-            teacher_logits = self.teacher(image_weak)
+            pseudo_model = self.teacher if self.teacher is not None else self.model
+            teacher_logits = pseudo_model(image_weak)
             teacher_probs = torch.softmax(teacher_logits, dim=1)
             pseudo_conf, pseudo_mask = teacher_probs.max(dim=1)
             threshold = getattr(self.semi_supervised, "threshold", 0.95)
@@ -375,11 +384,15 @@ class Trainer:
             state = {
                 "epoch": epoch,
                 "model_state_dict": self.model.state_dict(),  # type: ignore[assignment]
+                "teacher_state_dict": self.teacher.state_dict()
+                if self.teacher is not None
+                else None,
                 "optimizer_state_dict": self.optimizer.state_dict(),
                 "scheduler_state_dict": self.scheduler.state_dict()
                 if self.scheduler
                 else None,
                 "scaler_state_dict": self.scaler.state_dict(),
+                "global_step": self.global_step,
                 "train_loss": train_loss,
                 "val_loss": val_loss,
                 "config": self.config,
