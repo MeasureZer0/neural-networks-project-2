@@ -14,7 +14,7 @@ from visualisation.demo_app.landcover import (
     load_split_samples,
 )
 
-_MODEL_CACHE: dict[tuple[str, str], object] = {}
+_MODEL_CACHE: dict[tuple[str, str], LoadedModel] = {}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CHECKPOINT_DIR = PROJECT_ROOT / "checkpoints"
 

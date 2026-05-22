@@ -167,10 +167,16 @@ def load_model(checkpoint_path: str | Path, requested_device: str = "auto") -> L
     config = checkpoint.get("config", BaselineConfig())
     if not isinstance(config, BaselineConfig):
         raise TypeError("Checkpoint config is not a BaselineConfig instance.")
+    model_state_dict = checkpoint.get("model_state_dict")
+    if not isinstance(model_state_dict, dict) or not all(
+        isinstance(param_name, str) and isinstance(param_value, torch.Tensor)
+        for param_name, param_value in model_state_dict.items()
+    ):
+        raise TypeError("Checkpoint model_state_dict must map strings to tensors.")
 
     device = resolve_device(requested_device)
     model = build_model_from_config(config)
-    model.load_state_dict(normalize_state_dict_keys(checkpoint["model_state_dict"]))
+    model.load_state_dict(normalize_state_dict_keys(model_state_dict))
     model.to(device)
     model.eval()
 
