@@ -230,6 +230,30 @@ def build_error_map(
     return error_map, accuracy
 
 
+def synchronize_device(device: str) -> None:
+    if device == "cuda" and torch.cuda.is_available():
+        torch.cuda.synchronize()
+    elif device == "mps" and torch.backends.mps.is_available():
+        torch.mps.synchronize()
+
+
+def run_model_inference(
+    loaded_model: LoadedModel,
+    input_tensor: torch.Tensor,
+    output_size: tuple[int, int],
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    logits = loaded_model.model(input_tensor)
+    logits = F.interpolate(
+        logits,
+        size=output_size,
+        mode="bilinear",
+        align_corners=False,
+    )
+    probabilities = torch.softmax(logits, dim=1)
+    confidence, prediction = probabilities.max(dim=1)
+    return logits, confidence, prediction
+
+
 def image_to_base64(image: np.ndarray) -> str:
     pil_image = Image.fromarray(image)
     buffer = io.BytesIO()
@@ -304,17 +328,23 @@ def run_inference(
 
     input_tensor = preprocess_image(image, input_size).unsqueeze(0).to(loaded_model.device)
 
-    start_time = time.perf_counter()
     with torch.inference_mode():
-        logits = loaded_model.model(input_tensor)
-        logits = F.interpolate(
-            logits,
-            size=(original_size[1], original_size[0]),
-            mode="bilinear",
-            align_corners=False,
+        # Run one untimed warmup pass so the reported latency is less biased by
+        # one-time device and kernel startup overhead.
+        run_model_inference(
+            loaded_model=loaded_model,
+            input_tensor=input_tensor,
+            output_size=(original_size[1], original_size[0]),
         )
-        probabilities = torch.softmax(logits, dim=1)
-        confidence, prediction = probabilities.max(dim=1)
+        synchronize_device(loaded_model.device)
+
+        start_time = time.perf_counter()
+        logits, confidence, prediction = run_model_inference(
+            loaded_model=loaded_model,
+            input_tensor=input_tensor,
+            output_size=(original_size[1], original_size[0]),
+        )
+        synchronize_device(loaded_model.device)
     inference_ms = (time.perf_counter() - start_time) * 1000.0
 
     prediction_np = prediction.squeeze(0).cpu().numpy().astype(np.uint8)
