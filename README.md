@@ -1,14 +1,6 @@
-# Neural Networks Project 2
+# Segmentation of Satellite Imagery
 
 Semantic segmentation experiments on the LandCover.ai dataset. The repository contains a PyTorch training pipeline for three model families, configuration-driven experiments, Optuna-based hyperparameter tuning, and supporting scripts for dataset preparation and analysis.
-
-This README documents:
-
-- the current `main` branch
-- the pending semi-supervised branch `feat/init-semi-supervised`
-- the pending visualisation branch `feat/flask-model-showcase`
-
-Those two feature branches are not merged into `main` yet, but they are already accounted for here because they are part of the planned integration path for this repository.
 
 ## Project scope
 
@@ -45,7 +37,7 @@ The training code is config-driven and supports:
 ├── notebooks/              # exploratory work
 ├── data/                   # expected dataset location
 ├── checkpoints/            # saved checkpoints
-└── visualisation/          # Flask demo app branch target
+└── visualisation/          # Flask demo app
 ```
 
 ## Environment setup
@@ -91,7 +83,7 @@ Split files contain sample IDs without extensions. The loader resolves them as:
 - image: `data/landcover.ai.v1/output/<sample_id>.jpg`
 - mask: `data/landcover.ai.v1/output/<sample_id>_m.png`
 
-`main` currently uses the labeled `train.txt`, `val.txt`, and `test.txt` splits directly.
+The labeled `train.txt`, `val.txt`, and `test.txt` splits are used for supervised training. The repository also supports semi-supervised setups built from the same training pool or from external unlabeled imagery.
 
 ## Training pipeline
 
@@ -195,24 +187,22 @@ Type checking:
 uv run pyright
 ```
 
-## Current branch capabilities
+## Project capabilities
 
-`main` already provides:
+The repository provides:
 
 - supervised semantic segmentation training
+- semi-supervised FixMatch-style training with EMA teacher support
 - FPN, U-Net, and DeepLabV3 implementations
 - multiple ablation configs
 - checkpoint save/resume support
 - Optuna HPO
 - W&B integration
+- a Flask visualisation app for checkpoint inspection and side-by-side comparison
 
-## Pending branch: semi-supervised training
+## Semi-supervised training
 
-Branch:
-
-- `feat/init-semi-supervised`
-
-This branch extends the project with a FixMatch-style semi-supervised segmentation path built around teacher-student pseudo-labeling.
+The project includes a FixMatch-style semi-supervised segmentation path built around teacher-student pseudo-labeling.
 
 What it adds:
 
@@ -224,7 +214,7 @@ What it adds:
 - EMA teacher support
 - checkpoint resume for teacher state, scaler state, and global step
 
-Expected usage after merge:
+Example split generation:
 
 ```bash
 uv run python scripts/create_ssl_splits.py \
@@ -240,15 +230,17 @@ Then train with one of the SSL configs:
 - `training/configs/unet_fixmatch_config.py`
 - `training/configs/deeplabv3_fixmatch_config.py`
 
-The branch documentation currently lives in `semi-supervised.md` on that branch.
+Related files:
 
-## Pending branch: Flask visualisation app
+- `semi-supervised.md`
+- `scripts/create_ssl_splits.py`
+- `training/configs/fpn_fixmatch_config.py`
+- `training/configs/unet_fixmatch_config.py`
+- `training/configs/deeplabv3_fixmatch_config.py`
 
-Branch:
+## Visualisation app
 
-- `feat/flask-model-showcase`
-
-This branch adds a local Flask app for checkpoint inspection and side-by-side model comparison.
+The repository includes a local Flask app for checkpoint inspection and side-by-side model comparison.
 
 What it adds:
 
@@ -261,7 +253,7 @@ What it adds:
 - class coverage and per-image metrics
 - side-by-side checkpoint comparison
 
-Expected app entry point after merge:
+App entry point:
 
 ```bash
 uv run python visualisation/app.py
@@ -273,7 +265,11 @@ If the dataset is outside the default repo location, the app uses:
 LANDCOVER_DATA_ROOT=/path/to/data/landcover.ai.v1
 ```
 
-The branch documentation currently lives in `visualisation/README.md` on that branch.
+Related files:
+
+- `visualisation/app.py`
+- `visualisation/README.md`
+- `visualisation/demo_app/`
 
 ## Scripts and notebooks
 
@@ -288,4 +284,3 @@ Exploration notebooks live in `notebooks/`.
 ## Notes
 
 - The project metadata in `pyproject.toml` still contains an outdated description string and should not be treated as the functional project summary.
-- The visualisation and semi-supervised sections in this README describe branch work that still needs to be merged.
