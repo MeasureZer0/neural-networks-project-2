@@ -125,89 +125,93 @@
             </div>
           </div>
         </article>
+      </section>
 
+      <section class="model-results-grid">
         {% for result in results %}
-        <article class="card stat-card">
-          <p class="eyebrow">Checkpoint {{ loop.index }}</p>
-          <h2>{{ result.checkpoint.config_name }}</h2>
-          <div class="stats">
-            <div>
-              <span>Architecture</span>
-              <strong>{{ result.checkpoint.model_name }}</strong>
+        <div class="model-results-column">
+          <article class="card stat-card">
+            <p class="eyebrow">Checkpoint {{ loop.index }}</p>
+            <h2>{{ result.checkpoint.config_name }}</h2>
+            <div class="stats">
+              <div>
+                <span>Architecture</span>
+                <strong>{{ result.checkpoint.model_name }}</strong>
+              </div>
+              <div>
+                <span>Device</span>
+                <strong>{{ result.checkpoint.device }}</strong>
+              </div>
+              <div>
+                <span>Input size</span>
+                <strong>{{ result.checkpoint.img_size }}</strong>
+              </div>
+              <div>
+                <span>Epoch</span>
+                <strong>{{ result.checkpoint.epoch }}</strong>
+              </div>
+              <div>
+                <span>Train loss</span>
+                <strong>{{ "%.4f"|format(result.checkpoint.train_loss or 0) }}</strong>
+              </div>
+              <div>
+                <span>Val loss</span>
+                <strong>{{ "%.4f"|format(result.checkpoint.val_loss or 0) }}</strong>
+              </div>
             </div>
-            <div>
-              <span>Device</span>
-              <strong>{{ result.checkpoint.device }}</strong>
-            </div>
-            <div>
-              <span>Input size</span>
-              <strong>{{ result.checkpoint.img_size }}</strong>
-            </div>
-            <div>
-              <span>Epoch</span>
-              <strong>{{ result.checkpoint.epoch }}</strong>
-            </div>
-            <div>
-              <span>Train loss</span>
-              <strong>{{ "%.4f"|format(result.checkpoint.train_loss or 0) }}</strong>
-            </div>
-            <div>
-              <span>Val loss</span>
-              <strong>{{ "%.4f"|format(result.checkpoint.val_loss or 0) }}</strong>
-            </div>
-          </div>
-          <p class="path">{{ result.checkpoint.path }}</p>
-        </article>
+            <p class="path">{{ result.checkpoint.path }}</p>
+          </article>
 
-        <article class="card stat-card">
-          <p class="eyebrow">Prediction Summary</p>
-          <h2>{{ "%.2f"|format(result.inference_ms) }} ms</h2>
-          <div class="stats">
-            <div>
-              <span>Mean confidence</span>
-              <strong>{{ "%.3f"|format(result.summary.mean_confidence) }}</strong>
+          <article class="card stat-card">
+            <p class="eyebrow">Prediction Summary</p>
+            <h2>{{ "%.2f"|format(result.inference_ms) }} ms</h2>
+            <div class="stats">
+              <div>
+                <span>Mean confidence</span>
+                <strong>{{ "%.3f"|format(result.summary.mean_confidence) }}</strong>
+              </div>
+              <div>
+                <span>Low-confidence pixels</span>
+                <strong>{{ "%.1f"|format(result.summary.low_confidence_pct) }}%</strong>
+              </div>
+              {% if result.summary.dominant_class %}
+              <div>
+                <span>Dominant class</span>
+                <strong>{{ result.summary.dominant_class.name }}</strong>
+              </div>
+              <div>
+                <span>Coverage</span>
+                <strong>{{ "%.1f"|format(result.summary.dominant_class.coverage_pct) }}%</strong>
+              </div>
+              {% endif %}
             </div>
-            <div>
-              <span>Low-confidence pixels</span>
-              <strong>{{ "%.1f"|format(result.summary.low_confidence_pct) }}%</strong>
-            </div>
-            {% if result.summary.dominant_class %}
-            <div>
-              <span>Dominant class</span>
-              <strong>{{ result.summary.dominant_class.name }}</strong>
-            </div>
-            <div>
-              <span>Coverage</span>
-              <strong>{{ "%.1f"|format(result.summary.dominant_class.coverage_pct) }}%</strong>
-            </div>
-            {% endif %}
-          </div>
-        </article>
+          </article>
 
-        {% if result.metrics %}
-        <article class="card stat-card">
-          <p class="eyebrow">Per-Image Metrics</p>
-          <h2>Mask evaluation</h2>
-          <div class="stats">
-            <div>
-              <span>Pixel accuracy</span>
-              <strong>{{ "%.3f"|format(result.metrics.pixel_accuracy) }}</strong>
+          {% if result.metrics %}
+          <article class="card stat-card">
+            <p class="eyebrow">Per-Image Metrics</p>
+            <h2>Mask evaluation</h2>
+            <div class="stats">
+              <div>
+                <span>Pixel accuracy</span>
+                <strong>{{ "%.3f"|format(result.metrics.pixel_accuracy) }}</strong>
+              </div>
+              <div>
+                <span>Mean IoU</span>
+                <strong>{{ "%.3f"|format(result.metrics.mean_iou) }}</strong>
+              </div>
+              <div>
+                <span>Mean Dice</span>
+                <strong>{{ "%.3f"|format(result.metrics.mean_dice) }}</strong>
+              </div>
+              <div>
+                <span>Error pixels</span>
+                <strong>{{ "%.1f"|format(result.diagnostics.error_rate_pct or 0) }}%</strong>
+              </div>
             </div>
-            <div>
-              <span>Mean IoU</span>
-              <strong>{{ "%.3f"|format(result.metrics.mean_iou) }}</strong>
-            </div>
-            <div>
-              <span>Mean Dice</span>
-              <strong>{{ "%.3f"|format(result.metrics.mean_dice) }}</strong>
-            </div>
-            <div>
-              <span>Error pixels</span>
-              <strong>{{ "%.1f"|format(result.diagnostics.error_rate_pct or 0) }}%</strong>
-            </div>
-          </div>
-        </article>
-        {% endif %}
+          </article>
+          {% endif %}
+        </div>
         {% endfor %}
       </section>
 
@@ -259,55 +263,57 @@
         {% endfor %}
       </section>
 
-      <section class="tables compare-tables">
+      <section class="model-results-grid compare-tables">
         {% for result in results %}
-        <article class="card table-card">
-          <h3>{{ result.checkpoint.config_name }} class coverage</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Class</th>
-                <th>Pixels</th>
-                <th>Coverage</th>
-                <th>Mean confidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in result.summary.class_breakdown %}
-              <tr>
-                <td>{{ row.name }}</td>
-                <td>{{ row.pixels }}</td>
-                <td>{{ "%.1f"|format(row.coverage_pct) }}%</td>
-                <td>{{ "%.3f"|format(row.mean_confidence) }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </article>
+        <div class="model-results-column">
+          <article class="card table-card">
+            <h3>{{ result.checkpoint.config_name }} class coverage</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>Pixels</th>
+                  <th>Coverage</th>
+                  <th>Mean confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in result.summary.class_breakdown %}
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.pixels }}</td>
+                  <td>{{ "%.1f"|format(row.coverage_pct) }}%</td>
+                  <td>{{ "%.3f"|format(row.mean_confidence) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
 
-        {% if result.metrics %}
-        <article class="card table-card">
-          <h3>{{ result.checkpoint.config_name }} per-class metrics</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Class</th>
-                <th>IoU</th>
-                <th>Dice</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in result.metrics.per_class %}
-              <tr>
-                <td>{{ row.name }}</td>
-                <td>{{ "%.3f"|format(row.iou) }}</td>
-                <td>{{ "%.3f"|format(row.dice) }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </article>
-        {% endif %}
+          {% if result.metrics %}
+          <article class="card table-card">
+            <h3>{{ result.checkpoint.config_name }} per-class metrics</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>IoU</th>
+                  <th>Dice</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in result.metrics.per_class %}
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ "%.3f"|format(row.iou) }}</td>
+                  <td>{{ "%.3f"|format(row.dice) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+          {% endif %}
+        </div>
         {% endfor %}
       </section>
       {% endif %}

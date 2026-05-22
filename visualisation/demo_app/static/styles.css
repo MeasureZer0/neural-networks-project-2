@@ -160,13 +160,24 @@ select:focus {
 .results-grid,
 .gallery,
 .tables,
-.compare-gallery {
+.compare-gallery,
+.model-results-grid,
+.model-results-column {
   display: grid;
   gap: 20px;
 }
 
 .results-grid {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.model-results-grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+}
+
+.model-results-column {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .stat-card,
