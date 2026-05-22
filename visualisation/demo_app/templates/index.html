@@ -45,6 +45,24 @@
             </select>
           </label>
 
+          <label class="field field-wide">
+            <span>Compare with checkpoint</span>
+            <select name="compare_checkpoint_path">
+              <option value="">Single-checkpoint view</option>
+              {% for checkpoint in checkpoint_options %}
+              <option
+                value="{{ checkpoint.path }}"
+                {% if selected_compare_checkpoint == checkpoint.path %}selected{% endif %}
+              >
+                {{ checkpoint.label }}
+              </option>
+              {% endfor %}
+            </select>
+            <small class="field-note">
+              Choose a second checkpoint to run the same image through both models side by side.
+            </small>
+          </label>
+
           <label class="field">
             <span>Device</span>
             <select name="device">
@@ -90,10 +108,27 @@
         {% endif %}
       </section>
 
-      {% if result %}
+      {% if results %}
+      {% set primary_result = results[0] %}
       <section class="results-grid">
         <article class="card stat-card">
-          <p class="eyebrow">Checkpoint</p>
+          <p class="eyebrow">Input Source</p>
+          <h2>{{ primary_result.source or "Custom upload" }}</h2>
+          <div class="stats">
+            <div>
+              <span>Mask source</span>
+              <strong>{{ "Dataset pair" if primary_result.metrics and primary_result.source else ("Uploaded mask" if primary_result.metrics else "None") }}</strong>
+            </div>
+            <div>
+              <span>Checkpoints</span>
+              <strong>{{ results|length }}</strong>
+            </div>
+          </div>
+        </article>
+
+        {% for result in results %}
+        <article class="card stat-card">
+          <p class="eyebrow">Checkpoint {{ loop.index }}</p>
           <h2>{{ result.checkpoint.config_name }}</h2>
           <div class="stats">
             <div>
@@ -122,17 +157,6 @@
             </div>
           </div>
           <p class="path">{{ result.checkpoint.path }}</p>
-        </article>
-
-        <article class="card stat-card">
-          <p class="eyebrow">Input Source</p>
-          <h2>{{ result.source or "Custom upload" }}</h2>
-          <div class="stats">
-            <div>
-              <span>Mask source</span>
-              <strong>{{ "Dataset pair" if result.metrics and result.source else ("Uploaded mask" if result.metrics else "None") }}</strong>
-            </div>
-          </div>
         </article>
 
         <article class="card stat-card">
@@ -184,42 +208,61 @@
           </div>
         </article>
         {% endif %}
+        {% endfor %}
       </section>
 
       <section class="gallery">
         <article class="card image-card">
           <h3>Input image</h3>
-          <img src="data:image/png;base64,{{ result.images.input }}" alt="Input image" />
+          <img src="data:image/png;base64,{{ primary_result.images.input }}" alt="Input image" />
         </article>
-        <article class="card image-card">
-          <h3>Predicted mask</h3>
-          <img src="data:image/png;base64,{{ result.images.prediction }}" alt="Predicted mask" />
-        </article>
-        <article class="card image-card">
-          <h3>Overlay</h3>
-          <img src="data:image/png;base64,{{ result.images.overlay }}" alt="Prediction overlay" />
-        </article>
-        <article class="card image-card">
-          <h3>Confidence map</h3>
-          <img src="data:image/png;base64,{{ result.images.confidence }}" alt="Prediction confidence heatmap" />
-          <p class="caption">Red indicates lower confidence, blue indicates higher confidence.</p>
-        </article>
-        {% if result.images.ground_truth %}
+        {% if primary_result.images.ground_truth %}
         <article class="card image-card">
           <h3>Ground-truth mask</h3>
-          <img src="data:image/png;base64,{{ result.images.ground_truth }}" alt="Ground-truth mask" />
-        </article>
-        <article class="card image-card">
-          <h3>Error map</h3>
-          <img src="data:image/png;base64,{{ result.images.error_map }}" alt="Prediction error map" />
-          <p class="caption">Red pixels disagree with the reference mask.</p>
+          <img src="data:image/png;base64,{{ primary_result.images.ground_truth }}" alt="Ground-truth mask" />
         </article>
         {% endif %}
       </section>
 
-      <section class="tables">
+      <section class="compare-gallery">
+        {% for result in results %}
+        <article class="card compare-card">
+          <div class="compare-card-header">
+            <p class="eyebrow">Model {{ loop.index }}</p>
+            <h3>{{ result.checkpoint.config_name }}</h3>
+            <p class="path">{{ result.checkpoint.model_name }} on {{ result.checkpoint.device }}</p>
+          </div>
+
+          <div class="compare-images">
+            <div class="compare-image-panel">
+              <h4>Predicted mask</h4>
+              <img src="data:image/png;base64,{{ result.images.prediction }}" alt="Predicted mask for {{ result.checkpoint.config_name }}" />
+            </div>
+            <div class="compare-image-panel">
+              <h4>Overlay</h4>
+              <img src="data:image/png;base64,{{ result.images.overlay }}" alt="Prediction overlay for {{ result.checkpoint.config_name }}" />
+            </div>
+            <div class="compare-image-panel">
+              <h4>Confidence map</h4>
+              <img src="data:image/png;base64,{{ result.images.confidence }}" alt="Confidence heatmap for {{ result.checkpoint.config_name }}" />
+              <p class="caption">Red indicates lower confidence, blue indicates higher confidence.</p>
+            </div>
+            {% if result.images.error_map %}
+            <div class="compare-image-panel">
+              <h4>Error map</h4>
+              <img src="data:image/png;base64,{{ result.images.error_map }}" alt="Prediction error map for {{ result.checkpoint.config_name }}" />
+              <p class="caption">Red pixels disagree with the reference mask.</p>
+            </div>
+            {% endif %}
+          </div>
+        </article>
+        {% endfor %}
+      </section>
+
+      <section class="tables compare-tables">
+        {% for result in results %}
         <article class="card table-card">
-          <h3>Predicted class coverage</h3>
+          <h3>{{ result.checkpoint.config_name }} class coverage</h3>
           <table>
             <thead>
               <tr>
@@ -244,7 +287,7 @@
 
         {% if result.metrics %}
         <article class="card table-card">
-          <h3>Per-class metrics</h3>
+          <h3>{{ result.checkpoint.config_name }} per-class metrics</h3>
           <table>
             <thead>
               <tr>
@@ -265,6 +308,7 @@
           </table>
         </article>
         {% endif %}
+        {% endfor %}
       </section>
       {% endif %}
     </main>

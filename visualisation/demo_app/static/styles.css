@@ -159,7 +159,8 @@ select:focus {
 
 .results-grid,
 .gallery,
-.tables {
+.tables,
+.compare-gallery {
   display: grid;
   gap: 20px;
 }
@@ -197,6 +198,10 @@ select:focus {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+.compare-gallery {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
 .image-card img {
   width: 100%;
   margin-top: 16px;
@@ -210,6 +215,36 @@ select:focus {
   color: var(--muted);
   line-height: 1.5;
   font-size: 0.88rem;
+}
+
+.compare-card {
+  padding: 24px;
+}
+
+.compare-card-header h3,
+.compare-image-panel h4 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  letter-spacing: -0.03em;
+}
+
+.compare-card-header .path {
+  margin: 10px 0 0;
+}
+
+.compare-images {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 18px;
+}
+
+.compare-image-panel img {
+  width: 100%;
+  margin-top: 12px;
+  border-radius: 18px;
+  display: block;
+  background: rgba(29, 36, 51, 0.05);
 }
 
 .tables {

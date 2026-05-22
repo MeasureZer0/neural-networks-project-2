@@ -57,8 +57,10 @@ def build_base_context() -> dict[str, Any]:
         "dataset_root": str(resolve_data_root()),
         "selected_device": "auto",
         "selected_checkpoint": "",
+        "selected_compare_checkpoint": "",
         "selected_sample_id": "",
         "result": None,
+        "results": [],
         "error": None,
     }
 
@@ -117,6 +119,40 @@ def run_request(
     )
 
 
+def run_comparison(
+    checkpoint_paths: list[str],
+    requested_device: str,
+    sample_id: str,
+    samples: list[DatasetSample],
+) -> list[dict[str, Any]]:
+    unique_paths: list[str] = []
+    for checkpoint_path in checkpoint_paths:
+        if checkpoint_path and checkpoint_path not in unique_paths:
+            unique_paths.append(checkpoint_path)
+
+    if not unique_paths:
+        raise ValueError("Choose a checkpoint from the picker.")
+
+    image_bytes, mask_bytes, source_label = extract_request_payload(
+        checkpoint_path=unique_paths[0],
+        sample_id=sample_id,
+        samples=samples,
+    )
+
+    results: list[dict[str, Any]] = []
+    for checkpoint_path in unique_paths:
+        loaded_model = _get_loaded_model(checkpoint_path, requested_device)
+        results.append(
+            run_inference(
+                loaded_model=loaded_model,
+                image_bytes=image_bytes,
+                mask_bytes=mask_bytes,
+                source_label=source_label,
+            )
+        )
+    return results
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
@@ -128,20 +164,26 @@ def create_app() -> Flask:
 
         if request.method == "POST":
             checkpoint_path = request.form.get("checkpoint_path", "").strip()
+            compare_checkpoint_path = request.form.get(
+                "compare_checkpoint_path", ""
+            ).strip()
             requested_device = request.form.get("device", "auto")
             sample_id = request.form.get("sample_id", "").strip()
 
             context["selected_checkpoint"] = checkpoint_path
+            context["selected_compare_checkpoint"] = compare_checkpoint_path
             context["selected_device"] = requested_device
             context["selected_sample_id"] = sample_id
 
             try:
-                context["result"] = run_request(
-                    checkpoint_path=checkpoint_path,
+                results = run_comparison(
+                    checkpoint_paths=[checkpoint_path, compare_checkpoint_path],
                     requested_device=requested_device,
                     sample_id=sample_id,
                     samples=samples,
                 )
+                context["results"] = results
+                context["result"] = results[0]
             except Exception as exc:  # noqa: BLE001
                 context["error"] = str(exc)
 
