@@ -16,6 +16,9 @@ From the repository root:
 uv run python visualisation/app.py
 ```
 
+If the dataset lives outside the default repo path `data/landcover.ai.v1`, set
+`LANDCOVER_DATA_ROOT` before starting the app.
+
 ## What the app does
 
 - discovers available `.pth` checkpoints from `checkpoints/`
