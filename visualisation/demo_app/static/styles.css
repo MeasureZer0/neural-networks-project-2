@@ -205,6 +205,13 @@ select:focus {
   background: rgba(29, 36, 51, 0.05);
 }
 
+.caption {
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 0.88rem;
+}
+
 .tables {
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }

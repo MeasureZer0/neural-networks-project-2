@@ -143,6 +143,10 @@
               <span>Mean confidence</span>
               <strong>{{ "%.3f"|format(result.summary.mean_confidence) }}</strong>
             </div>
+            <div>
+              <span>Low-confidence pixels</span>
+              <strong>{{ "%.1f"|format(result.summary.low_confidence_pct) }}%</strong>
+            </div>
             {% if result.summary.dominant_class %}
             <div>
               <span>Dominant class</span>
@@ -173,6 +177,10 @@
               <span>Mean Dice</span>
               <strong>{{ "%.3f"|format(result.metrics.mean_dice) }}</strong>
             </div>
+            <div>
+              <span>Error pixels</span>
+              <strong>{{ "%.1f"|format(result.diagnostics.error_rate_pct or 0) }}%</strong>
+            </div>
           </div>
         </article>
         {% endif %}
@@ -191,10 +199,20 @@
           <h3>Overlay</h3>
           <img src="data:image/png;base64,{{ result.images.overlay }}" alt="Prediction overlay" />
         </article>
+        <article class="card image-card">
+          <h3>Confidence map</h3>
+          <img src="data:image/png;base64,{{ result.images.confidence }}" alt="Prediction confidence heatmap" />
+          <p class="caption">Red indicates lower confidence, blue indicates higher confidence.</p>
+        </article>
         {% if result.images.ground_truth %}
         <article class="card image-card">
           <h3>Ground-truth mask</h3>
           <img src="data:image/png;base64,{{ result.images.ground_truth }}" alt="Ground-truth mask" />
+        </article>
+        <article class="card image-card">
+          <h3>Error map</h3>
+          <img src="data:image/png;base64,{{ result.images.error_map }}" alt="Prediction error map" />
+          <p class="caption">Red pixels disagree with the reference mask.</p>
         </article>
         {% endif %}
       </section>

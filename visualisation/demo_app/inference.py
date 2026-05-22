@@ -208,6 +208,28 @@ def blend_overlay(image: np.ndarray, mask_rgb: np.ndarray, alpha: float = 0.45) 
     return np.clip(image * (1.0 - alpha) + mask_rgb * alpha, 0, 255).astype(np.uint8)
 
 
+def confidence_to_rgb(confidence: np.ndarray) -> np.ndarray:
+    scaled = np.clip(confidence, 0.0, 1.0)
+    red = np.clip(255 * (1.0 - (scaled * 1.2)), 0, 255)
+    green = np.clip(255 * (1.0 - np.abs((scaled - 0.5) * 2.0)), 0, 255)
+    blue = np.clip(255 * (scaled * 1.1), 0, 255)
+    return np.stack([red, green, blue], axis=-1).astype(np.uint8)
+
+
+def build_error_map(
+    image: np.ndarray,
+    prediction: np.ndarray,
+    ground_truth: np.ndarray,
+) -> tuple[np.ndarray, float]:
+    correct = prediction == ground_truth
+    base = np.clip(image * 0.35, 0, 255).astype(np.uint8)
+    error_map = base.copy()
+    error_map[correct] = np.clip(image[correct] * 0.65 + 40, 0, 255).astype(np.uint8)
+    error_map[~correct] = np.array([255, 59, 48], dtype=np.uint8)
+    accuracy = float(correct.mean())
+    return error_map, accuracy
+
+
 def image_to_base64(image: np.ndarray) -> str:
     pil_image = Image.fromarray(image)
     buffer = io.BytesIO()
@@ -235,6 +257,7 @@ def summarize_prediction(prediction: np.ndarray, confidence: np.ndarray) -> dict
     dominant = max(breakdown, key=lambda row: row["pixels"]) if breakdown else None
     return {
         "mean_confidence": float(confidence.mean()),
+        "low_confidence_pct": float((confidence < 0.6).mean() * 100.0),
         "dominant_class": dominant,
         "class_breakdown": breakdown,
     }
@@ -299,9 +322,12 @@ def run_inference(
     image_np = np.asarray(image, dtype=np.uint8)
     mask_rgb = mask_to_rgb(prediction_np, loaded_model.config.num_classes)
     overlay = blend_overlay(image_np, mask_rgb)
+    confidence_rgb = confidence_to_rgb(confidence_np)
 
     metrics = None
     ground_truth_b64 = None
+    error_map_b64 = None
+    error_rate_pct = None
     if mask_bytes is not None and mask_bytes:
         ground_truth = load_mask(mask_bytes, original_size)
         metrics = compute_metrics(logits, ground_truth, loaded_model.config.num_classes)
@@ -309,6 +335,9 @@ def run_inference(
             ground_truth.numpy().astype(np.uint8), loaded_model.config.num_classes
         )
         ground_truth_b64 = image_to_base64(ground_truth_rgb)
+        error_map, agreement = build_error_map(image_np, prediction_np, ground_truth.numpy())
+        error_map_b64 = image_to_base64(error_map)
+        error_rate_pct = (1.0 - agreement) * 100.0
 
     checkpoint = loaded_model.checkpoint
     return {
@@ -330,6 +359,11 @@ def run_inference(
             "input": image_to_base64(image_np),
             "prediction": image_to_base64(mask_rgb),
             "overlay": image_to_base64(overlay),
+            "confidence": image_to_base64(confidence_rgb),
             "ground_truth": ground_truth_b64,
+            "error_map": error_map_b64,
+        },
+        "diagnostics": {
+            "error_rate_pct": error_rate_pct,
         },
     }
