@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Segmentation Model Showcase</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero card">
+        <p class="eyebrow">Flask App</p>
+        <h1>Interactive Semantic Segmentation Showcase</h1>
+        <p class="lede">
+          Pick a trained checkpoint from this repo, run it on a LandCover test
+          chip with its paired mask, or switch to a custom upload and inspect
+          the predicted mask, overlay, and per-image metrics.
+        </p>
+      </section>
+
+      <section class="card form-card">
+        <form method="post" enctype="multipart/form-data" class="controls">
+          <label class="field field-wide">
+            <span>Checkpoint</span>
+            <select name="checkpoint_path">
+              <option value="">Select a checkpoint</option>
+              {% for checkpoint in checkpoint_options %}
+              {% set checkpoint_value = selected_checkpoint or default_checkpoint %}
+              <option
+                value="{{ checkpoint.path }}"
+                {% if checkpoint_value == checkpoint.path %}selected{% endif %}
+              >
+                {{ checkpoint.label }}
+              </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label class="field field-wide">
+            <span>Compare with checkpoint</span>
+            <select name="compare_checkpoint_path">
+              <option value="">Single-checkpoint view</option>
+              {% for checkpoint in checkpoint_options %}
+              <option
+                value="{{ checkpoint.path }}"
+                {% if selected_compare_checkpoint == checkpoint.path %}selected{% endif %}
+              >
+                {{ checkpoint.label }}
+              </option>
+              {% endfor %}
+            </select>
+            <small class="field-note">
+              Choose a second checkpoint to run the same image through both models side by side.
+            </small>
+          </label>
+
+          <label class="field">
+            <span>Device</span>
+            <select name="device">
+              {% for option in ["auto", "cpu", "cuda", "mps"] %}
+              <option value="{{ option }}" {% if selected_device == option %}selected{% endif %}>
+                {{ option }}
+              </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label class="field field-wide">
+            <span>LandCover test sample</span>
+            <select name="sample_id">
+              <option value="">Custom upload instead</option>
+              {% for sample in sample_options %}
+              <option value="{{ sample.sample_id }}" {% if selected_sample_id == sample.sample_id %}selected{% endif %}>
+                {{ sample.sample_id }}
+              </option>
+              {% endfor %}
+            </select>
+            <small class="field-note">
+              Loaded from `test.txt` and matched to `output/&lt;sample&gt;.jpg` plus `output/&lt;sample&gt;_m.png`.
+              {{ sample_count }} samples available from {{ dataset_root }}.
+            </small>
+          </label>
+
+          <label class="field">
+            <span>Custom image</span>
+            <input type="file" name="image_file" accept="image/*" />
+          </label>
+
+          <label class="field">
+            <span>Custom mask (optional)</span>
+            <input type="file" name="mask_file" accept="image/png,image/*" />
+          </label>
+
+          <button type="submit" class="primary-button">Run Model</button>
+        </form>
+
+        {% if error %}
+        <div class="alert error">{{ error }}</div>
+        {% endif %}
+      </section>
+
+      {% if results %}
+      {% set primary_result = results[0] %}
+      <section class="results-grid">
+        <article class="card stat-card">
+          <p class="eyebrow">Input Source</p>
+          <h2>{{ primary_result.source or "Custom upload" }}</h2>
+          <div class="stats">
+            <div>
+              <span>Mask source</span>
+              <strong>{{ "Dataset pair" if primary_result.metrics and primary_result.source else ("Uploaded mask" if primary_result.metrics else "None") }}</strong>
+            </div>
+            <div>
+              <span>Checkpoints</span>
+              <strong>{{ results|length }}</strong>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="model-results-grid">
+        {% for result in results %}
+        <div class="model-results-column">
+          <article class="card stat-card">
+            <p class="eyebrow">Checkpoint {{ loop.index }}</p>
+            <h2>{{ result.checkpoint.config_name }}</h2>
+            <div class="stats">
+              <div>
+                <span>Architecture</span>
+                <strong>{{ result.checkpoint.model_name }}</strong>
+              </div>
+              <div>
+                <span>Device</span>
+                <strong>{{ result.checkpoint.device }}</strong>
+              </div>
+              <div>
+                <span>Input size</span>
+                <strong>{{ result.checkpoint.img_size }}</strong>
+              </div>
+              <div>
+                <span>Epoch</span>
+                <strong>{{ result.checkpoint.epoch }}</strong>
+              </div>
+              <div>
+                <span>Train loss</span>
+                <strong>{{ "%.4f"|format(result.checkpoint.train_loss or 0) }}</strong>
+              </div>
+              <div>
+                <span>Val loss</span>
+                <strong>{{ "%.4f"|format(result.checkpoint.val_loss or 0) }}</strong>
+              </div>
+            </div>
+            <p class="path">{{ result.checkpoint.path }}</p>
+          </article>
+
+          <article class="card stat-card">
+            <p class="eyebrow">Prediction Summary</p>
+            <h2>{{ "%.2f"|format(result.inference_ms) }} ms</h2>
+            <div class="stats">
+              <div>
+                <span>Mean confidence</span>
+                <strong>{{ "%.3f"|format(result.summary.mean_confidence) }}</strong>
+              </div>
+              <div>
+                <span>Low-confidence pixels</span>
+                <strong>{{ "%.1f"|format(result.summary.low_confidence_pct) }}%</strong>
+              </div>
+              {% if result.summary.dominant_class %}
+              <div>
+                <span>Dominant class</span>
+                <strong>{{ result.summary.dominant_class.name }}</strong>
+              </div>
+              <div>
+                <span>Coverage</span>
+                <strong>{{ "%.1f"|format(result.summary.dominant_class.coverage_pct) }}%</strong>
+              </div>
+              {% endif %}
+            </div>
+          </article>
+
+          {% if result.metrics %}
+          <article class="card stat-card">
+            <p class="eyebrow">Per-Image Metrics</p>
+            <h2>Mask evaluation</h2>
+            <div class="stats">
+              <div>
+                <span>Pixel accuracy</span>
+                <strong>{{ "%.3f"|format(result.metrics.pixel_accuracy) }}</strong>
+              </div>
+              <div>
+                <span>Mean IoU</span>
+                <strong>{{ "%.3f"|format(result.metrics.mean_iou) }}</strong>
+              </div>
+              <div>
+                <span>Mean Dice</span>
+                <strong>{{ "%.3f"|format(result.metrics.mean_dice) }}</strong>
+              </div>
+              <div>
+                <span>Error pixels</span>
+                <strong>{{ "%.1f"|format(result.diagnostics.error_rate_pct or 0) }}%</strong>
+              </div>
+            </div>
+          </article>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </section>
+
+      <section class="gallery">
+        <article class="card image-card">
+          <h3>Input image</h3>
+          <img src="data:image/png;base64,{{ primary_result.images.input }}" alt="Input image" />
+        </article>
+        {% if primary_result.images.ground_truth %}
+        <article class="card image-card">
+          <h3>Ground-truth mask</h3>
+          <img src="data:image/png;base64,{{ primary_result.images.ground_truth }}" alt="Ground-truth mask" />
+        </article>
+        {% endif %}
+      </section>
+
+      <section class="compare-gallery">
+        {% for result in results %}
+        <article class="card compare-card">
+          <div class="compare-card-header">
+            <p class="eyebrow">Model {{ loop.index }}</p>
+            <h3>{{ result.checkpoint.config_name }}</h3>
+            <p class="path">{{ result.checkpoint.model_name }} on {{ result.checkpoint.device }}</p>
+          </div>
+
+          <div class="compare-images">
+            <div class="compare-image-panel">
+              <h4>Predicted mask</h4>
+              <img src="data:image/png;base64,{{ result.images.prediction }}" alt="Predicted mask for {{ result.checkpoint.config_name }}" />
+            </div>
+            <div class="compare-image-panel">
+              <h4>Overlay</h4>
+              <img src="data:image/png;base64,{{ result.images.overlay }}" alt="Prediction overlay for {{ result.checkpoint.config_name }}" />
+            </div>
+            <div class="compare-image-panel">
+              <h4>Confidence map</h4>
+              <img src="data:image/png;base64,{{ result.images.confidence }}" alt="Confidence heatmap for {{ result.checkpoint.config_name }}" />
+              <p class="caption">Red indicates lower confidence, blue indicates higher confidence.</p>
+            </div>
+            {% if result.images.error_map %}
+            <div class="compare-image-panel">
+              <h4>Error map</h4>
+              <img src="data:image/png;base64,{{ result.images.error_map }}" alt="Prediction error map for {{ result.checkpoint.config_name }}" />
+              <p class="caption">Red pixels disagree with the reference mask.</p>
+            </div>
+            {% endif %}
+          </div>
+        </article>
+        {% endfor %}
+      </section>
+
+      <section class="model-results-grid compare-tables">
+        {% for result in results %}
+        <div class="model-results-column">
+          <article class="card table-card">
+            <h3>{{ result.checkpoint.config_name }} class coverage</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>Pixels</th>
+                  <th>Coverage</th>
+                  <th>Mean confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in result.summary.class_breakdown %}
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.pixels }}</td>
+                  <td>{{ "%.1f"|format(row.coverage_pct) }}%</td>
+                  <td>{{ "%.3f"|format(row.mean_confidence) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+
+          {% if result.metrics %}
+          <article class="card table-card">
+            <h3>{{ result.checkpoint.config_name }} per-class metrics</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>IoU</th>
+                  <th>Dice</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in result.metrics.per_class %}
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ "%.3f"|format(row.iou) }}</td>
+                  <td>{{ "%.3f"|format(row.dice) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </section>
+      {% endif %}
+    </main>
+  </body>
+</html>

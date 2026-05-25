@@ -16,7 +16,7 @@ from models.UNet import UNet
 from torch_datasets.landcover_dataset import LandcoverDataset
 from torch_datasets.transforms import ValTransform, train_transform_from_config
 from training.configs.baseline import BaselineConfig
-from training.loss import CELoss, DiceLoss, FocalLoss
+from training.loss import CEDiceLoss, CELoss, DiceLoss, FocalLoss
 from training.metrics import SegmentationMetrics
 from training.trainer import Trainer
 
@@ -37,7 +37,12 @@ def build_model(model_name: str, config: BaselineConfig) -> torch.nn.Module:
         raise ValueError(f"Unknown model: {model_name!r}")
 
 
-LOSSES: dict[str, type] = {"dice": DiceLoss, "ce": CELoss, "focal": FocalLoss}
+LOSSES: dict[str, type] = {
+    "dice": DiceLoss,
+    "ce": CELoss,
+    "focal": FocalLoss,
+    "ce_dice": CEDiceLoss,
+}
 
 CHECKPOINT_BASE = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "checkpoints", "tune"
@@ -260,7 +265,7 @@ def main(
     if use_wandb:
         wandb.init(
             project=getattr(config, "wandb_project", "semantic-segmentation"),
-            entity=getattr(config, "wandb_entity", None),
+            entity=getattr(config, "wandb_entity", None),  # change if needed
             name=run_name,
             # Wszystkie trialy HPO trafiają do grupy "hpo" — oddzielnej od ablacji
             group="hpo",
@@ -337,7 +342,7 @@ if __name__ == "__main__":
         "--model", type=str, default="fpn", choices=["fpn", "unet", "deeplabv3"]
     )
     parser.add_argument(
-        "--loss", type=str, default="dice", choices=["dice", "ce", "focal"]
+        "--loss", type=str, default="dice", choices=["dice", "ce", "focal", "ce_dice"]
     )
     parser.add_argument("--config", type=str, default="baseline")
     parser.add_argument("--n_trials", type=int, default=40)

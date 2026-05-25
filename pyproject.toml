@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "albumentations[torch]>=2.0.8",
     "datasets>=4.8.4",
+    "flask>=3.1.2",
     "fvcore>=0.1.5.post20221221",
     "matplotlib>=3.10.8",
     "numpy>=2.4.2",
