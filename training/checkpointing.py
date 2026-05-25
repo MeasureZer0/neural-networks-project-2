@@ -1,7 +1,7 @@
 import pathlib
 import pickle
 from os import PathLike, makedirs, path
-from typing import Any
+from typing import Any, Optional
 
 import torch
 import torch.nn as nn
@@ -114,20 +114,26 @@ def load_checkpoint(
     scheduler: Optional[LRScheduler] = None,
     scaler: Optional[GradScaler] = None,
 ) -> dict[str, Any]:
-    if not os.path.isfile(checkpoint_path):
+    if not path.isfile(checkpoint_path):
         raise FileNotFoundError(f"No checkpoint found at {checkpoint_path}")
 
     checkpoint = load_checkpoint_file(checkpoint_path)
 
     model.load_state_dict(
-        normalize_state_dict_keys(_require_tensor_state_dict(checkpoint, "model_state_dict"))
+        normalize_state_dict_keys(
+            _require_tensor_state_dict(checkpoint, "model_state_dict")
+        )
     )
 
     if optimizer and "optimizer_state_dict" in checkpoint:
-        optimizer.load_state_dict(_require_state_dict(checkpoint, "optimizer_state_dict"))
+        optimizer.load_state_dict(
+            _require_state_dict(checkpoint, "optimizer_state_dict")
+        )
 
     if scheduler and "scheduler_state_dict" in checkpoint:
-        scheduler.load_state_dict(_require_state_dict(checkpoint, "scheduler_state_dict"))
+        scheduler.load_state_dict(
+            _require_state_dict(checkpoint, "scheduler_state_dict")
+        )
 
     if scaler and "scaler_state_dict" in checkpoint:
         scaler.load_state_dict(_require_state_dict(checkpoint, "scaler_state_dict"))
