@@ -4,6 +4,20 @@ from typing import List, Optional
 
 
 @dataclass
+class SemiSupervisedConfig:
+    enabled: bool = False
+    unlabeled_split_file: Path | None = None
+    extra_unlabeled_split_file: Path | None = None
+    unlabeled_batch_ratio: int = 1
+    threshold: float = 0.95
+    lambda_u: float = 1.0
+    unsup_warmup_epochs: int = 5
+    use_ema_teacher: bool = True
+    ema_decay: float = 0.996
+    use_dual_strong_views: bool = False
+
+
+@dataclass
 class BaselineConfig:
     name: str = "baseline"
     description: str = ""
@@ -58,3 +72,4 @@ class BaselineConfig:
     wandb_project: str = "semantic-segmentation"
     wandb_entity: Optional[str] = None
     wandb_tags: List[str] = field(default_factory=list)
+    semi_supervised: SemiSupervisedConfig = field(default_factory=SemiSupervisedConfig)

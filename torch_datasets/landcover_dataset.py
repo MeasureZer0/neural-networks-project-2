@@ -64,6 +64,61 @@ class LandcoverDataset(Dataset):
         return result
 
 
+class UnlabeledLandcoverDataset(Dataset):
+    def __init__(
+        self,
+        image_paths: list[str] | list[Path],
+        image_dir: Path | None = None,
+        transform: Optional[Callable] = None,
+    ) -> None:
+        self.image_dir = image_dir
+        self.transform = transform
+        self.image_paths = [self._resolve_path(path) for path in image_paths]
+
+    @classmethod
+    def from_split_file(
+        cls,
+        split_file: Path,
+        image_dir: Path | None = None,
+        transform: Optional[Callable] = None,
+    ) -> "UnlabeledLandcoverDataset":
+        with open(split_file, "r") as f:
+            image_paths = [line.strip() for line in f if line.strip()]
+        return cls(image_paths=image_paths, image_dir=image_dir, transform=transform)
+
+    def _resolve_path(self, value: str | Path) -> Path:
+        path = Path(value)
+        if path.suffix:
+            return path
+        if self.image_dir is None:
+            raise ValueError(
+                "image_dir is required when unlabeled split entries are ids."
+            )
+        return self.image_dir / f"{path}.jpg"
+
+    def __len__(self) -> int:
+        return len(self.image_paths)
+
+    def __getitem__(self, idx: int) -> Dict[str, Tensor | str]:
+        image_path = self.image_paths[idx]
+        image_tensor = io.read_image(str(image_path))
+        image_np: np.ndarray = image_tensor.permute(1, 2, 0).numpy()
+
+        if self.transform is None:
+            image = torch.from_numpy(image_np).permute(2, 0, 1).float() / 255.0
+            return {
+                "image_id": image_path.stem,
+                "image_weak": image,
+                "image_strong": image,
+            }
+
+        transformed = self.transform(image_np)
+        return {
+            "image_id": image_path.stem,
+            **transformed,
+        }
+
+
 BASE_DIR = Path(__file__).parent.resolve()
 DATA_DIR = (BASE_DIR / ".." / "data" / "landcover.ai.v1").resolve()
 
