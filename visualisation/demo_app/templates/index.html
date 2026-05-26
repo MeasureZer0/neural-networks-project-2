@@ -29,7 +29,13 @@
       </section>
 
       <section class="card form-card">
-        <form method="post" enctype="multipart/form-data" class="controls">
+        <form
+          method="post"
+          action="{{ url_for('create_job') }}"
+          enctype="multipart/form-data"
+          class="controls"
+          id="run-form"
+        >
           <label class="field">
             <span>Mode</span>
             <select name="mode" id="mode-select">
@@ -146,6 +152,42 @@
         <div class="alert error">{{ error }}</div>
         {% endif %}
       </section>
+
+      {% if loading_job %}
+      <section
+        class="card loading-card"
+        id="loading-card"
+        data-status-url="{{ url_for('job_status', job_id=loading_job.job_id) }}"
+        data-redirect-url="{{ url_for('job_page', job_id=loading_job.job_id) }}"
+      >
+        <p class="eyebrow">Loading</p>
+        <h2 id="loading-title">
+          {{ "Running benchmark" if selected_mode == "benchmark" else "Running models" }}
+        </h2>
+        <p class="lede" id="loading-message">{{ loading_job.current_message }}</p>
+        <div class="progress-track" aria-hidden="true">
+          <div
+            class="progress-bar"
+            id="progress-bar"
+            style="width: {{ loading_job.progress_pct }}%;"
+          ></div>
+        </div>
+        <div class="progress-meta">
+          <strong id="progress-percent">{{ loading_job.progress_pct }}%</strong>
+          <span id="progress-steps">
+            {{ loading_job.completed_steps }} / {{ loading_job.total_steps }} steps
+          </span>
+        </div>
+        <div class="progress-detail">
+          <span id="progress-model">
+            {{ loading_job.current_model_label if loading_job.current_model_label else "Waiting for model…" }}
+          </span>
+          <span id="progress-sample">
+            {{ loading_job.current_sample_label if loading_job.current_sample_label else "Waiting for image…" }}
+          </span>
+        </div>
+      </section>
+      {% endif %}
 
       {% if benchmark %}
       <section class="results-grid">
@@ -609,10 +651,19 @@
       </div>
     </template>
     <script>
+      const runForm = document.getElementById("run-form");
       const checkpointList = document.getElementById("checkpoint-list");
       const addCheckpointButton = document.getElementById("add-checkpoint");
       const checkpointTemplate = document.getElementById("checkpoint-row-template");
+      const loadingCard = document.getElementById("loading-card");
       const modeSelect = document.getElementById("mode-select");
+      const loadingTitle = document.getElementById("loading-title");
+      const loadingMessage = document.getElementById("loading-message");
+      const progressBar = document.getElementById("progress-bar");
+      const progressPercent = document.getElementById("progress-percent");
+      const progressSteps = document.getElementById("progress-steps");
+      const progressModel = document.getElementById("progress-model");
+      const progressSample = document.getElementById("progress-sample");
       const sampleSelect = document.getElementById("sample-id-select");
       const submitButton = document.getElementById("submit-button");
       const toggleSampleFavoriteButton = document.getElementById("toggle-sample-favorite");
@@ -759,6 +810,64 @@
         }
       }
 
+      function renderProgress(progress) {
+        if (!loadingCard) {
+          return;
+        }
+
+        const isBenchmark = progress.total_steps > 1 && modeSelect?.value === "benchmark";
+        if (loadingTitle) {
+          loadingTitle.textContent = isBenchmark ? "Running benchmark" : "Running models";
+        }
+        if (loadingMessage) {
+          loadingMessage.textContent = progress.current_message || "Loading...";
+        }
+        if (progressBar) {
+          progressBar.style.width = `${progress.progress_pct}%`;
+        }
+        if (progressPercent) {
+          progressPercent.textContent = `${progress.progress_pct}%`;
+        }
+        if (progressSteps) {
+          progressSteps.textContent = `${progress.completed_steps} / ${progress.total_steps} steps`;
+        }
+        if (progressModel) {
+          progressModel.textContent = progress.current_model_label || "Waiting for model…";
+        }
+        if (progressSample) {
+          progressSample.textContent = progress.current_sample_label || "Waiting for image…";
+        }
+      }
+
+      async function pollJob() {
+        if (!loadingCard) {
+          return;
+        }
+
+        const statusUrl = loadingCard.dataset.statusUrl;
+        const redirectUrl = loadingCard.dataset.redirectUrl;
+        if (!statusUrl || !redirectUrl) {
+          return;
+        }
+
+        const response = await fetch(statusUrl, {
+          headers: { "X-Requested-With": "fetch" },
+        });
+        if (!response.ok) {
+          window.location.reload();
+          return;
+        }
+
+        const progress = await response.json();
+        renderProgress(progress);
+        if (progress.status === "completed" || progress.status === "failed") {
+          window.location.assign(redirectUrl);
+          return;
+        }
+
+        window.setTimeout(pollJob, 500);
+      }
+
       addCheckpointButton?.addEventListener("click", () => {
         const fragment = checkpointTemplate.content.cloneNode(true);
         checkpointList.appendChild(fragment);
@@ -805,6 +914,29 @@
         updateModeVisibility();
       });
 
+      runForm?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        submitButton?.setAttribute("disabled", "disabled");
+
+        try {
+          const response = await fetch(runForm.action, {
+            method: "POST",
+            body: new FormData(runForm),
+            headers: { "X-Requested-With": "fetch" },
+          });
+
+          if (!response.ok) {
+            window.location.reload();
+            return;
+          }
+
+          const payload = await response.json();
+          window.location.assign(payload.redirect_url);
+        } catch {
+          window.location.reload();
+        }
+      });
+
       checkpointList?.addEventListener("change", (event) => {
         const target = event.target;
         if (!(target instanceof HTMLSelectElement) || target.name !== "checkpoint_paths") {
@@ -818,6 +950,9 @@
       rebuildCheckpointOptions();
       renderSampleOptions();
       updateModeVisibility();
+      if (loadingCard) {
+        pollJob();
+      }
     </script>
   </body>
 </html>

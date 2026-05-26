@@ -214,6 +214,45 @@ select:focus {
   border-radius: 18px;
 }
 
+.loading-card {
+  padding: 24px;
+}
+
+.progress-track {
+  margin-top: 18px;
+  height: 16px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(29, 36, 51, 0.08);
+  border: 1px solid rgba(29, 36, 51, 0.08);
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), #e6b173);
+  transition: width 200ms ease;
+}
+
+.progress-meta,
+.progress-detail {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.progress-meta {
+  margin-top: 12px;
+}
+
+.progress-detail {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .error {
   background: rgba(239, 68, 68, 0.12);
   color: #991b1b;
