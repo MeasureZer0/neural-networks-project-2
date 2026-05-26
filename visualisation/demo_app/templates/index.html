@@ -839,6 +839,11 @@
         }
       }
 
+      function scrollToLoadingCard() {
+        const target = loadingCard || document.body;
+        target.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+
       async function pollJob() {
         if (!loadingCard) {
           return;
@@ -917,6 +922,7 @@
       runForm?.addEventListener("submit", async (event) => {
         event.preventDefault();
         submitButton?.setAttribute("disabled", "disabled");
+        window.setTimeout(scrollToLoadingCard, 0);
 
         try {
           const response = await fetch(runForm.action, {
@@ -951,6 +957,7 @@
       renderSampleOptions();
       updateModeVisibility();
       if (loadingCard) {
+        scrollToLoadingCard();
         pollJob();
       }
     </script>
