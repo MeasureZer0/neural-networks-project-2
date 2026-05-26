@@ -4,6 +4,7 @@ import os
 import threading
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from statistics import mean
 from typing import Any
@@ -150,6 +151,7 @@ def create_job_record(
         "current_model_label": "",
         "current_sample_label": "",
         "current_message": "Queued.",
+        "started_at": None,
         "result": None,
         "results": [],
         "benchmark": None,
@@ -173,6 +175,22 @@ def progress_payload(job_id: str, job: dict[str, Any]) -> dict[str, Any]:
     total_steps = max(int(job.get("total_steps", 1)), 1)
     completed_steps = max(0, min(int(job.get("completed_steps", 0)), total_steps))
     progress_pct = int(round((completed_steps / total_steps) * 100))
+    started_at = job.get("started_at")
+    elapsed_seconds = 0.0
+    eta_seconds: float | None = None
+    estimated_end: str | None = None
+    if isinstance(started_at, str):
+        started_at_dt = datetime.fromisoformat(started_at)
+        elapsed_seconds = max(
+            0.0,
+            (datetime.now(UTC) - started_at_dt).total_seconds(),
+        )
+        if completed_steps > 0 and completed_steps < total_steps:
+            seconds_per_step = elapsed_seconds / completed_steps
+            eta_seconds = max(0.0, seconds_per_step * (total_steps - completed_steps))
+            estimated_end = (
+                datetime.now(UTC) + timedelta(seconds=eta_seconds)
+            ).astimezone().strftime("%H:%M:%S")
     return {
         "job_id": job_id,
         "status": job["status"],
@@ -182,6 +200,9 @@ def progress_payload(job_id: str, job: dict[str, Any]) -> dict[str, Any]:
         "current_model_label": job.get("current_model_label") or "",
         "current_sample_label": job.get("current_sample_label") or "",
         "current_message": job.get("current_message") or "",
+        "elapsed_seconds": elapsed_seconds,
+        "eta_seconds": eta_seconds,
+        "estimated_end": estimated_end,
         "redirect_url": url_for("job_page", job_id=job_id),
     }
 
@@ -301,6 +322,7 @@ def run_interactive_job(
         status="running",
         total_steps=len(unique_paths),
         current_message="Preparing interactive comparison.",
+        started_at=datetime.now(UTC).isoformat(),
     )
 
     results: list[dict[str, Any]] = []
@@ -351,6 +373,7 @@ def run_benchmark_job(
         status="running",
         total_steps=total_steps,
         current_message="Preparing benchmark.",
+        started_at=datetime.now(UTC).isoformat(),
     )
 
     model_reports: list[dict[str, Any]] = []

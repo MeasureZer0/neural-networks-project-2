@@ -247,6 +247,14 @@ select:focus {
   margin-top: 12px;
 }
 
+.progress-meta-secondary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--muted);
+}
+
 .progress-detail {
   margin-top: 10px;
   color: var(--muted);

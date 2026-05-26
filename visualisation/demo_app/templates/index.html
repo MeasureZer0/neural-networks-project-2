@@ -174,9 +174,21 @@
         </div>
         <div class="progress-meta">
           <strong id="progress-percent">{{ loading_job.progress_pct }}%</strong>
-          <span id="progress-steps">
-            {{ loading_job.completed_steps }} / {{ loading_job.total_steps }} steps
-          </span>
+          <div class="progress-meta-secondary">
+            <span id="progress-steps">
+              {{ loading_job.completed_steps }} / {{ loading_job.total_steps }} steps
+            </span>
+            <span id="progress-elapsed">
+              Elapsed: {{ "%.0f"|format(loading_job.elapsed_seconds) }}s
+            </span>
+            <span id="progress-eta">
+              {% if loading_job.estimated_end %}
+              Est. end: {{ loading_job.estimated_end }}
+              {% else %}
+              Est. end: calculating…
+              {% endif %}
+            </span>
+          </div>
         </div>
         <div class="progress-detail">
           <span id="progress-model">
@@ -662,6 +674,8 @@
       const progressBar = document.getElementById("progress-bar");
       const progressPercent = document.getElementById("progress-percent");
       const progressSteps = document.getElementById("progress-steps");
+      const progressElapsed = document.getElementById("progress-elapsed");
+      const progressEta = document.getElementById("progress-eta");
       const progressModel = document.getElementById("progress-model");
       const progressSample = document.getElementById("progress-sample");
       const sampleSelect = document.getElementById("sample-id-select");
@@ -831,12 +845,36 @@
         if (progressSteps) {
           progressSteps.textContent = `${progress.completed_steps} / ${progress.total_steps} steps`;
         }
+        if (progressElapsed) {
+          progressElapsed.textContent = `Elapsed: ${formatElapsed(progress.elapsed_seconds || 0)}`;
+        }
+        if (progressEta) {
+          if (progress.estimated_end) {
+            const etaText = progress.eta_seconds
+              ? `Est. end: ${progress.estimated_end} (${formatElapsed(progress.eta_seconds)} left)`
+              : `Est. end: ${progress.estimated_end}`;
+            progressEta.textContent = etaText;
+          } else {
+            progressEta.textContent = "Est. end: calculating…";
+          }
+        }
         if (progressModel) {
           progressModel.textContent = progress.current_model_label || "Waiting for model…";
         }
         if (progressSample) {
           progressSample.textContent = progress.current_sample_label || "Waiting for image…";
         }
+      }
+
+      function formatElapsed(totalSeconds) {
+        const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+        const hours = Math.floor(safeSeconds / 3600);
+        const minutes = Math.floor((safeSeconds % 3600) / 60);
+        const seconds = safeSeconds % 60;
+
+        return [hours, minutes, seconds]
+          .map((value) => String(value).padStart(2, "0"))
+          .join(":");
       }
 
       function scrollToLoadingCard() {
