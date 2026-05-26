@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +24,11 @@ class DatasetSample:
 class CheckpointOption:
     label: str
     path: str
+
+
+def _natural_sort_key(value: str) -> list[int | str]:
+    parts = re.split(r"(\d+)", value)
+    return [int(part) if part.isdigit() else part.lower() for part in parts]
 
 
 def discover_checkpoints(checkpoint_dir: Path) -> list[CheckpointOption]:
@@ -54,6 +60,7 @@ def load_split_samples(image_dir: Path, split_file: Path) -> list[DatasetSample]
                     mask_path=image_dir / f"{sample_id}_m.png",
                 )
             )
+    samples.sort(key=lambda sample: _natural_sort_key(sample.sample_id))
     return samples
 
 
