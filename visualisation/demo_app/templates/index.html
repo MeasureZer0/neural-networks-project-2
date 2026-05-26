@@ -21,47 +21,56 @@
         <p class="eyebrow">Flask App</p>
         <h1>Interactive Semantic Segmentation Showcase</h1>
         <p class="lede">
-          Pick a trained checkpoint from this repo, run it on a LandCover test
-          chip with its paired mask, or switch to a custom upload and inspect
-          the predicted mask, overlay, and per-image metrics.
+          Pick one or more trained checkpoints from this repo, run them on a
+          LandCover test chip with its paired mask, or switch to a custom
+          upload and inspect the predicted masks, overlays, and per-image
+          metrics in a responsive comparison grid.
         </p>
       </section>
 
       <section class="card form-card">
         <form method="post" enctype="multipart/form-data" class="controls">
-          <label class="field field-wide">
-            <span>Checkpoint</span>
-            <select name="checkpoint_path">
-              <option value="">Select a checkpoint</option>
-              {% for checkpoint in checkpoint_options %}
-              {% set checkpoint_value = selected_checkpoint or default_checkpoint %}
-              <option
-                value="{{ checkpoint.path }}"
-                {% if checkpoint_value == checkpoint.path %}selected{% endif %}
-              >
-                {{ checkpoint.label }}
-              </option>
-              {% endfor %}
-            </select>
-          </label>
+          <section class="field field-wide checkpoint-manager">
+            <div class="checkpoint-manager-header">
+              <div>
+                <span>Checkpoints</span>
+                <small class="field-note">
+                  Add as many model checkpoints as you want. Duplicates are ignored before inference.
+                </small>
+              </div>
+              <button type="button" class="secondary-button" id="add-checkpoint">
+                Add model
+              </button>
+            </div>
 
-          <label class="field field-wide">
-            <span>Compare with checkpoint</span>
-            <select name="compare_checkpoint_path">
-              <option value="">Single-checkpoint view</option>
-              {% for checkpoint in checkpoint_options %}
-              <option
-                value="{{ checkpoint.path }}"
-                {% if selected_compare_checkpoint == checkpoint.path %}selected{% endif %}
-              >
-                {{ checkpoint.label }}
-              </option>
+            <div id="checkpoint-list" class="checkpoint-list">
+              {% for checkpoint_value in selected_checkpoint_paths %}
+              <div class="checkpoint-row">
+                <label class="field">
+                  <span>Model {{ loop.index }}</span>
+                  <select name="checkpoint_paths">
+                    <option value="">Select a checkpoint</option>
+                    {% for checkpoint in checkpoint_options %}
+                    <option
+                      value="{{ checkpoint.path }}"
+                      {% if checkpoint_value == checkpoint.path %}selected{% endif %}
+                    >
+                      {{ checkpoint.label }}
+                    </option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  class="ghost-button remove-checkpoint"
+                  {% if loop.length == 1 %}disabled{% endif %}
+                >
+                  Remove
+                </button>
+              </div>
               {% endfor %}
-            </select>
-            <small class="field-note">
-              Choose a second checkpoint to run the same image through both models side by side.
-            </small>
-          </label>
+            </div>
+          </section>
 
           <label class="field">
             <span>Device</span>
@@ -127,92 +136,118 @@
         </article>
       </section>
 
-      <section class="model-results-grid">
-        {% for result in results %}
-        <div class="model-results-column">
-          <article class="card stat-card">
-            <p class="eyebrow">Checkpoint {{ loop.index }}</p>
-            <h2>{{ result.checkpoint.config_name }}</h2>
-            <div class="stats">
-              <div>
-                <span>Architecture</span>
-                <strong>{{ result.checkpoint.model_name }}</strong>
-              </div>
-              <div>
-                <span>Device</span>
-                <strong>{{ result.checkpoint.device }}</strong>
-              </div>
-              <div>
-                <span>Input size</span>
-                <strong>{{ result.checkpoint.img_size }}</strong>
-              </div>
-              <div>
-                <span>Epoch</span>
-                <strong>{{ result.checkpoint.epoch }}</strong>
-              </div>
-              <div>
-                <span>Train loss</span>
-                <strong>{{ "%.4f"|format(result.checkpoint.train_loss or 0) }}</strong>
-              </div>
-              <div>
-                <span>Val loss</span>
-                <strong>{{ "%.4f"|format(result.checkpoint.val_loss or 0) }}</strong>
-              </div>
-            </div>
-            <p class="path">{{ result.checkpoint.path }}</p>
-          </article>
-
-          <article class="card stat-card">
-            <p class="eyebrow">Prediction Summary</p>
-            <h2>{{ "%.2f"|format(result.inference_ms) }} ms</h2>
-            <div class="stats">
-              <div>
-                <span>Mean confidence</span>
-                <strong>{{ "%.3f"|format(result.summary.mean_confidence) }}</strong>
-              </div>
-              <div>
-                <span>Low-confidence pixels</span>
-                <strong>{{ "%.1f"|format(result.summary.low_confidence_pct) }}%</strong>
-              </div>
-              {% if result.summary.dominant_class %}
-              <div>
-                <span>Dominant class</span>
-                <strong>{{ result.summary.dominant_class.name }}</strong>
-              </div>
-              <div>
-                <span>Coverage</span>
-                <strong>{{ "%.1f"|format(result.summary.dominant_class.coverage_pct) }}%</strong>
-              </div>
-              {% endif %}
-            </div>
-          </article>
-
-          {% if result.metrics %}
-          <article class="card stat-card">
-            <p class="eyebrow">Per-Image Metrics</p>
-            <h2>Mask evaluation</h2>
-            <div class="stats">
-              <div>
-                <span>Pixel accuracy</span>
-                <strong>{{ "%.3f"|format(result.metrics.pixel_accuracy) }}</strong>
-              </div>
-              <div>
-                <span>Mean IoU</span>
-                <strong>{{ "%.3f"|format(result.metrics.mean_iou) }}</strong>
-              </div>
-              <div>
-                <span>Mean Dice</span>
-                <strong>{{ "%.3f"|format(result.metrics.mean_dice) }}</strong>
-              </div>
-              <div>
-                <span>Error pixels</span>
-                <strong>{{ "%.1f"|format(result.diagnostics.error_rate_pct or 0) }}%</strong>
-              </div>
-            </div>
-          </article>
-          {% endif %}
+      <section class="card table-card comparison-summary-card">
+        <p class="eyebrow">Model Comparison</p>
+        <div class="horizontal-scroll">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                {% for result in results %}
+                <th>Model {{ loop.index }}<br /><span>{{ result.checkpoint.config_name }}</span></th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Architecture</td>
+                {% for result in results %}
+                <td>{{ result.checkpoint.model_name }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Device</td>
+                {% for result in results %}
+                <td>{{ result.checkpoint.device }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Input size</td>
+                {% for result in results %}
+                <td>{{ result.checkpoint.img_size }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Epoch</td>
+                {% for result in results %}
+                <td>{{ result.checkpoint.epoch }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Train loss</td>
+                {% for result in results %}
+                <td>{{ "%.4f"|format(result.checkpoint.train_loss or 0) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Val loss</td>
+                {% for result in results %}
+                <td>{{ "%.4f"|format(result.checkpoint.val_loss or 0) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Inference time</td>
+                {% for result in results %}
+                <td>{{ "%.2f"|format(result.inference_ms) }} ms</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean confidence</td>
+                {% for result in results %}
+                <td>{{ "%.3f"|format(result.summary.mean_confidence) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Low-confidence pixels</td>
+                {% for result in results %}
+                <td>{{ "%.1f"|format(result.summary.low_confidence_pct) }}%</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Dominant class</td>
+                {% for result in results %}
+                <td>{{ result.summary.dominant_class.name if result.summary.dominant_class else "n/a" }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Dominant coverage</td>
+                {% for result in results %}
+                <td>
+                  {% if result.summary.dominant_class %}
+                  {{ "%.1f"|format(result.summary.dominant_class.coverage_pct) }}%
+                  {% else %}
+                  n/a
+                  {% endif %}
+                </td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Pixel accuracy</td>
+                {% for result in results %}
+                <td>{{ "%.3f"|format(result.metrics.pixel_accuracy) if result.metrics else "n/a" }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean IoU</td>
+                {% for result in results %}
+                <td>{{ "%.3f"|format(result.metrics.mean_iou) if result.metrics else "n/a" }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean Dice</td>
+                {% for result in results %}
+                <td>{{ "%.3f"|format(result.metrics.mean_dice) if result.metrics else "n/a" }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Error pixels</td>
+                {% for result in results %}
+                <td>{{ "%.1f"|format(result.diagnostics.error_rate_pct or 0) if result.metrics else "n/a" }}%</td>
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
         </div>
-        {% endfor %}
       </section>
 
       <section class="gallery">
@@ -228,95 +263,155 @@
         {% endif %}
       </section>
 
-      <section class="compare-gallery">
-        {% for result in results %}
-        <article class="card compare-card">
-          <div class="compare-card-header">
-            <p class="eyebrow">Model {{ loop.index }}</p>
-            <h3>{{ result.checkpoint.config_name }}</h3>
-            <p class="path">{{ result.checkpoint.model_name }} on {{ result.checkpoint.device }}</p>
-          </div>
+      <div class="horizontal-scroll">
+        <section class="compare-gallery horizontal-grid">
+          {% for result in results %}
+          <article class="card compare-card">
+            <div class="compare-card-header">
+              <p class="eyebrow">Model {{ loop.index }}</p>
+              <h3>{{ result.checkpoint.config_name }}</h3>
+              <p class="path">{{ result.checkpoint.model_name }} on {{ result.checkpoint.device }}</p>
+            </div>
 
-          <div class="compare-images">
-            <div class="compare-image-panel">
-              <h4>Predicted mask</h4>
-              <img src="data:image/png;base64,{{ result.images.prediction }}" alt="Predicted mask for {{ result.checkpoint.config_name }}" />
+            <div class="compare-images">
+              <div class="compare-image-panel">
+                <h4>Predicted mask</h4>
+                <img src="data:image/png;base64,{{ result.images.prediction }}" alt="Predicted mask for {{ result.checkpoint.config_name }}" />
+              </div>
+              <div class="compare-image-panel">
+                <h4>Overlay</h4>
+                <img src="data:image/png;base64,{{ result.images.overlay }}" alt="Prediction overlay for {{ result.checkpoint.config_name }}" />
+              </div>
+              <div class="compare-image-panel">
+                <h4>Confidence map</h4>
+                <img src="data:image/png;base64,{{ result.images.confidence }}" alt="Confidence heatmap for {{ result.checkpoint.config_name }}" />
+                <p class="caption">Red indicates lower confidence, blue indicates higher confidence.</p>
+              </div>
+              {% if result.images.error_map %}
+              <div class="compare-image-panel">
+                <h4>Error map</h4>
+                <img src="data:image/png;base64,{{ result.images.error_map }}" alt="Prediction error map for {{ result.checkpoint.config_name }}" />
+                <p class="caption">Red pixels disagree with the reference mask.</p>
+              </div>
+              {% endif %}
             </div>
-            <div class="compare-image-panel">
-              <h4>Overlay</h4>
-              <img src="data:image/png;base64,{{ result.images.overlay }}" alt="Prediction overlay for {{ result.checkpoint.config_name }}" />
-            </div>
-            <div class="compare-image-panel">
-              <h4>Confidence map</h4>
-              <img src="data:image/png;base64,{{ result.images.confidence }}" alt="Confidence heatmap for {{ result.checkpoint.config_name }}" />
-              <p class="caption">Red indicates lower confidence, blue indicates higher confidence.</p>
-            </div>
-            {% if result.images.error_map %}
-            <div class="compare-image-panel">
-              <h4>Error map</h4>
-              <img src="data:image/png;base64,{{ result.images.error_map }}" alt="Prediction error map for {{ result.checkpoint.config_name }}" />
-              <p class="caption">Red pixels disagree with the reference mask.</p>
-            </div>
+          </article>
+          {% endfor %}
+        </section>
+      </div>
+
+      <div class="horizontal-scroll">
+        <section class="model-results-grid compare-tables horizontal-grid">
+          {% for result in results %}
+          <div class="model-results-column">
+            <article class="card table-card">
+              <h3>{{ result.checkpoint.config_name }} class coverage</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Class</th>
+                    <th>Pixels</th>
+                    <th>Coverage</th>
+                    <th>Mean confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in result.summary.class_breakdown %}
+                  <tr>
+                    <td>{{ row.name }}</td>
+                    <td>{{ row.pixels }}</td>
+                    <td>{{ "%.1f"|format(row.coverage_pct) }}%</td>
+                    <td>{{ "%.3f"|format(row.mean_confidence) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </article>
+
+            {% if result.metrics %}
+            <article class="card table-card">
+              <h3>{{ result.checkpoint.config_name }} per-class metrics</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Class</th>
+                    <th>IoU</th>
+                    <th>Dice</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in result.metrics.per_class %}
+                  <tr>
+                    <td>{{ row.name }}</td>
+                    <td>{{ "%.3f"|format(row.iou) }}</td>
+                    <td>{{ "%.3f"|format(row.dice) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </article>
             {% endif %}
           </div>
-        </article>
-        {% endfor %}
-      </section>
-
-      <section class="model-results-grid compare-tables">
-        {% for result in results %}
-        <div class="model-results-column">
-          <article class="card table-card">
-            <h3>{{ result.checkpoint.config_name }} class coverage</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Class</th>
-                  <th>Pixels</th>
-                  <th>Coverage</th>
-                  <th>Mean confidence</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in result.summary.class_breakdown %}
-                <tr>
-                  <td>{{ row.name }}</td>
-                  <td>{{ row.pixels }}</td>
-                  <td>{{ "%.1f"|format(row.coverage_pct) }}%</td>
-                  <td>{{ "%.3f"|format(row.mean_confidence) }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </article>
-
-          {% if result.metrics %}
-          <article class="card table-card">
-            <h3>{{ result.checkpoint.config_name }} per-class metrics</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Class</th>
-                  <th>IoU</th>
-                  <th>Dice</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in result.metrics.per_class %}
-                <tr>
-                  <td>{{ row.name }}</td>
-                  <td>{{ "%.3f"|format(row.iou) }}</td>
-                  <td>{{ "%.3f"|format(row.dice) }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </article>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </section>
+          {% endfor %}
+        </section>
+      </div>
       {% endif %}
     </main>
+    <template id="checkpoint-row-template">
+      <div class="checkpoint-row">
+        <label class="field">
+          <span>Model</span>
+          <select name="checkpoint_paths">
+            <option value="">Select a checkpoint</option>
+            {% for checkpoint in checkpoint_options %}
+            <option value="{{ checkpoint.path }}">{{ checkpoint.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="button" class="ghost-button remove-checkpoint">Remove</button>
+      </div>
+    </template>
+    <script>
+      const checkpointList = document.getElementById("checkpoint-list");
+      const addCheckpointButton = document.getElementById("add-checkpoint");
+      const checkpointTemplate = document.getElementById("checkpoint-row-template");
+
+      function updateCheckpointLabels() {
+        const rows = checkpointList.querySelectorAll(".checkpoint-row");
+        rows.forEach((row, index) => {
+          const label = row.querySelector("label span");
+          const removeButton = row.querySelector(".remove-checkpoint");
+          if (label) {
+            label.textContent = `Model ${index + 1}`;
+          }
+          if (removeButton) {
+            removeButton.disabled = rows.length === 1;
+          }
+        });
+      }
+
+      addCheckpointButton?.addEventListener("click", () => {
+        const fragment = checkpointTemplate.content.cloneNode(true);
+        checkpointList.appendChild(fragment);
+        updateCheckpointLabels();
+      });
+
+      checkpointList?.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || !target.classList.contains("remove-checkpoint")) {
+          return;
+        }
+
+        const row = target.closest(".checkpoint-row");
+        if (!row || checkpointList.children.length === 1) {
+          return;
+        }
+
+        row.remove();
+        updateCheckpointLabels();
+      });
+
+      updateCheckpointLabels();
+    </script>
   </body>
 </html>

@@ -48,33 +48,29 @@ def build_base_context() -> dict[str, Any]:
     image_dir, test_split = dataset_paths()
     checkpoints = discover_checkpoints(CHECKPOINT_DIR)
     samples = load_split_samples(image_dir, test_split)
+    default_checkpoint = _default_checkpoint(checkpoints)
 
     return {
         "checkpoint_options": checkpoints,
         "sample_options": samples,
         "sample_count": len(samples),
-        "default_checkpoint": _default_checkpoint(checkpoints),
         "dataset_root": str(resolve_data_root()),
         "selected_device": "auto",
-        "selected_checkpoint": "",
-        "selected_compare_checkpoint": "",
+        "selected_checkpoint_paths": [default_checkpoint] if default_checkpoint else [""],
         "selected_sample_id": "",
         "result": None,
         "results": [],
         "error": None,
     }
 
+
 def extract_request_payload(
-    checkpoint_path: str,
     sample_id: str,
     samples: list[DatasetSample],
 ) -> tuple[bytes, bytes | None, str | None]:
     sample_index = index_samples(samples)
     image_file = request.files.get("image_file")
     mask_file = request.files.get("mask_file")
-
-    if not checkpoint_path:
-        raise ValueError("Choose a checkpoint from the picker.")
 
     if sample_id:
         sample = sample_index.get(sample_id)
@@ -106,7 +102,6 @@ def run_request(
     samples: list[DatasetSample],
 ) -> dict[str, Any]:
     image_bytes, mask_bytes, source_label = extract_request_payload(
-        checkpoint_path=checkpoint_path,
         sample_id=sample_id,
         samples=samples,
     )
@@ -134,7 +129,6 @@ def run_comparison(
         raise ValueError("Choose a checkpoint from the picker.")
 
     image_bytes, mask_bytes, source_label = extract_request_payload(
-        checkpoint_path=unique_paths[0],
         sample_id=sample_id,
         samples=samples,
     )
@@ -163,21 +157,21 @@ def create_app() -> Flask:
         samples = context["sample_options"]
 
         if request.method == "POST":
-            checkpoint_path = request.form.get("checkpoint_path", "").strip()
-            compare_checkpoint_path = request.form.get(
-                "compare_checkpoint_path", ""
-            ).strip()
+            checkpoint_paths = [
+                value.strip()
+                for value in request.form.getlist("checkpoint_paths")
+                if value.strip()
+            ]
             requested_device = request.form.get("device", "auto")
             sample_id = request.form.get("sample_id", "").strip()
 
-            context["selected_checkpoint"] = checkpoint_path
-            context["selected_compare_checkpoint"] = compare_checkpoint_path
+            context["selected_checkpoint_paths"] = checkpoint_paths or [""]
             context["selected_device"] = requested_device
             context["selected_sample_id"] = sample_id
 
             try:
                 results = run_comparison(
-                    checkpoint_paths=[checkpoint_path, compare_checkpoint_path],
+                    checkpoint_paths=checkpoint_paths,
                     requested_device=requested_device,
                     sample_id=sample_id,
                     samples=samples,
