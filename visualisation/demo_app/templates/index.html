@@ -303,55 +303,57 @@
       <div class="horizontal-scroll">
         <section class="model-results-grid compare-tables horizontal-grid">
           {% for result in results %}
-          <div class="model-results-column">
-            <article class="card table-card">
-              <h3>{{ result.checkpoint.config_name }} class coverage</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Class</th>
-                    <th>Pixels</th>
-                    <th>Coverage</th>
-                    <th>Mean confidence</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for row in result.summary.class_breakdown %}
-                  <tr>
-                    <td>{{ row.name }}</td>
-                    <td>{{ row.pixels }}</td>
-                    <td>{{ "%.1f"|format(row.coverage_pct) }}%</td>
-                    <td>{{ "%.3f"|format(row.mean_confidence) }}</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </article>
+          <article class="card table-card">
+            <h3>{{ result.checkpoint.config_name }} class coverage</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>Pixels</th>
+                  <th>Coverage</th>
+                  <th>Mean confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in result.summary.class_breakdown %}
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.pixels }}</td>
+                  <td>{{ "%.1f"|format(row.coverage_pct) }}%</td>
+                  <td>{{ "%.3f"|format(row.mean_confidence) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+          {% endfor %}
+        </section>
+      </div>
 
-            {% if result.metrics %}
-            <article class="card table-card">
-              <h3>{{ result.checkpoint.config_name }} per-class metrics</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Class</th>
-                    <th>IoU</th>
-                    <th>Dice</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for row in result.metrics.per_class %}
-                  <tr>
-                    <td>{{ row.name }}</td>
-                    <td>{{ "%.3f"|format(row.iou) }}</td>
-                    <td>{{ "%.3f"|format(row.dice) }}</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </article>
-            {% endif %}
-          </div>
+      <div class="horizontal-scroll">
+        <section class="model-results-grid compare-tables horizontal-grid">
+          {% for result in results if result.metrics %}
+          <article class="card table-card">
+            <h3>{{ result.checkpoint.config_name }} per-class metrics</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>IoU</th>
+                  <th>Dice</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in result.metrics.per_class %}
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ "%.3f"|format(row.iou) }}</td>
+                  <td>{{ "%.3f"|format(row.dice) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
           {% endfor %}
         </section>
       </div>
