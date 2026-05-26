@@ -7,7 +7,7 @@
   --line: rgba(29, 36, 51, 0.1);
   --accent: #c26d2a;
   --accent-strong: #8d4514;
-  --shadow: 0 24px 80px rgba(72, 45, 18, 0.14);
+  --shadow: 0 14px 36px rgba(72, 45, 18, 0.08);
 }
 
 * {
