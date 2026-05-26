@@ -83,9 +83,14 @@
             </select>
           </label>
 
-          <label class="field field-wide">
-            <span>LandCover test sample</span>
-            <select name="sample_id">
+          <div class="field field-wide">
+            <div class="sample-picker-header">
+              <span>LandCover test sample</span>
+              <button type="button" class="ghost-button favorite-button" id="toggle-sample-favorite">
+                Add to favorites
+              </button>
+            </div>
+            <select name="sample_id" id="sample-id-select">
               <option value="">Custom upload instead</option>
               {% for sample in sample_options %}
               <option value="{{ sample.sample_id }}" {% if selected_sample_id == sample.sample_id %}selected{% endif %}>
@@ -97,7 +102,7 @@
               Loaded from `test.txt` and matched to `output/&lt;sample&gt;.jpg` plus `output/&lt;sample&gt;_m.png`.
               {{ sample_count }} samples available from {{ dataset_root }}.
             </small>
-          </label>
+          </div>
 
           <label class="field">
             <span>Custom image</span>
@@ -366,6 +371,13 @@
         {% endfor %}
       ]
     </script>
+    <script id="sample-options-data" type="application/json">
+      [
+        {% for sample in sample_options %}
+        {"value": {{ sample.sample_id|tojson }}, "label": {{ sample.sample_id|tojson }}}{% if not loop.last %},{% endif %}
+        {% endfor %}
+      ]
+    </script>
     <template id="checkpoint-row-template">
       <div class="checkpoint-row">
         <label class="field">
@@ -384,9 +396,15 @@
       const checkpointList = document.getElementById("checkpoint-list");
       const addCheckpointButton = document.getElementById("add-checkpoint");
       const checkpointTemplate = document.getElementById("checkpoint-row-template");
+      const sampleSelect = document.getElementById("sample-id-select");
+      const toggleSampleFavoriteButton = document.getElementById("toggle-sample-favorite");
       const checkpointOptions = JSON.parse(
         document.getElementById("checkpoint-options-data")?.textContent || "[]"
       );
+      const sampleOptions = JSON.parse(
+        document.getElementById("sample-options-data")?.textContent || "[]"
+      );
+      const sampleFavoritesStorageKey = "demo_app.favorite_samples";
 
       function getSelectedCheckpointValues() {
         return Array.from(
@@ -426,6 +444,79 @@
         });
       }
 
+      function getFavoriteSamples() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(sampleFavoritesStorageKey) || "[]");
+          return Array.isArray(parsed) ? parsed.filter((value) => typeof value === "string") : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function setFavoriteSamples(favorites) {
+        localStorage.setItem(sampleFavoritesStorageKey, JSON.stringify(favorites));
+      }
+
+      function renderSampleOptions() {
+        if (!sampleSelect) {
+          return;
+        }
+
+        const selectedValue = sampleSelect.value;
+        const favorites = new Set(getFavoriteSamples());
+        const favoriteSamples = sampleOptions.filter((option) => favorites.has(option.value));
+        const regularSamples = sampleOptions.filter((option) => !favorites.has(option.value));
+
+        sampleSelect.innerHTML = "";
+
+        const customOption = document.createElement("option");
+        customOption.value = "";
+        customOption.textContent = "Custom upload instead";
+        customOption.selected = selectedValue === "";
+        sampleSelect.appendChild(customOption);
+
+        if (favoriteSamples.length > 0) {
+          const favoritesGroup = document.createElement("optgroup");
+          favoritesGroup.label = "Favorites";
+          favoriteSamples.forEach((option) => {
+            const optionElement = document.createElement("option");
+            optionElement.value = option.value;
+            optionElement.textContent = `★ ${option.label}`;
+            optionElement.selected = option.value === selectedValue;
+            favoritesGroup.appendChild(optionElement);
+          });
+          sampleSelect.appendChild(favoritesGroup);
+        }
+
+        const allGroup = document.createElement("optgroup");
+        allGroup.label = favoriteSamples.length > 0 ? "All samples" : "Samples";
+        regularSamples.forEach((option) => {
+          const optionElement = document.createElement("option");
+          optionElement.value = option.value;
+          optionElement.textContent = option.label;
+          optionElement.selected = option.value === selectedValue;
+          allGroup.appendChild(optionElement);
+        });
+        sampleSelect.appendChild(allGroup);
+
+        updateFavoriteButtonState();
+      }
+
+      function updateFavoriteButtonState() {
+        if (!toggleSampleFavoriteButton || !sampleSelect) {
+          return;
+        }
+
+        const selectedValue = sampleSelect.value;
+        const favorites = new Set(getFavoriteSamples());
+        const isFavorite = selectedValue && favorites.has(selectedValue);
+
+        toggleSampleFavoriteButton.disabled = selectedValue === "";
+        toggleSampleFavoriteButton.textContent = isFavorite
+          ? "Remove favorite"
+          : "Add to favorites";
+      }
+
       function updateCheckpointLabels() {
         const rows = checkpointList.querySelectorAll(".checkpoint-row");
         rows.forEach((row, index) => {
@@ -463,6 +554,25 @@
         rebuildCheckpointOptions();
       });
 
+      toggleSampleFavoriteButton?.addEventListener("click", () => {
+        if (!sampleSelect || sampleSelect.value === "") {
+          return;
+        }
+
+        const favorites = getFavoriteSamples();
+        const selectedValue = sampleSelect.value;
+        const nextFavorites = favorites.includes(selectedValue)
+          ? favorites.filter((value) => value !== selectedValue)
+          : [selectedValue, ...favorites.filter((value) => value !== selectedValue)];
+
+        setFavoriteSamples(nextFavorites);
+        renderSampleOptions();
+      });
+
+      sampleSelect?.addEventListener("change", () => {
+        updateFavoriteButtonState();
+      });
+
       checkpointList?.addEventListener("change", (event) => {
         const target = event.target;
         if (!(target instanceof HTMLSelectElement) || target.name !== "checkpoint_paths") {
@@ -474,6 +584,7 @@
 
       updateCheckpointLabels();
       rebuildCheckpointOptions();
+      renderSampleOptions();
     </script>
   </body>
 </html>

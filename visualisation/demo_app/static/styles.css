@@ -114,6 +114,13 @@ button {
   justify-content: space-between;
 }
 
+.sample-picker-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .checkpoint-manager-header {
   align-items: start;
 }
@@ -186,6 +193,10 @@ select:focus {
 .ghost-button {
   min-width: 108px;
   background: transparent;
+}
+
+.favorite-button {
+  min-width: 160px;
 }
 
 .ghost-button:disabled {
@@ -364,7 +375,8 @@ select:focus {
   }
 
   .checkpoint-manager-header,
-  .checkpoint-row {
+  .checkpoint-row,
+  .sample-picker-header {
     flex-direction: column;
     align-items: stretch;
   }
