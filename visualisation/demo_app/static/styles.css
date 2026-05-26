@@ -298,7 +298,8 @@ select:focus {
 }
 
 .gallery {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 280px));
+  justify-content: start;
 }
 
 .compare-gallery {
@@ -314,6 +315,8 @@ select:focus {
   margin-top: 16px;
   border-radius: 20px;
   display: block;
+  max-height: 280px;
+  object-fit: contain;
   background: rgba(29, 36, 51, 0.05);
 }
 
@@ -375,6 +378,10 @@ select:focus {
   .compare-gallery.horizontal-grid {
     grid-auto-columns: minmax(calc(100vw - 48px), calc(100vw - 48px));
   }
+
+  .gallery {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
 }
 
 .tables {
@@ -401,11 +408,6 @@ th {
 }
 
 @media (max-width: 720px) {
-  .shell {
-    width: min(100% - 20px, 1180px);
-    margin-top: 20px;
-  }
-
   .hero,
   .form-card,
   .stat-card,

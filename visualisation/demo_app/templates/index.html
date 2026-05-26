@@ -357,6 +357,13 @@
       </div>
       {% endif %}
     </main>
+    <script id="checkpoint-options-data" type="application/json">
+      [
+        {% for checkpoint in checkpoint_options %}
+        {"value": {{ checkpoint.path|tojson }}, "label": {{ checkpoint.label|tojson }}}{% if not loop.last %},{% endif %}
+        {% endfor %}
+      ]
+    </script>
     <template id="checkpoint-row-template">
       <div class="checkpoint-row">
         <label class="field">
@@ -375,6 +382,47 @@
       const checkpointList = document.getElementById("checkpoint-list");
       const addCheckpointButton = document.getElementById("add-checkpoint");
       const checkpointTemplate = document.getElementById("checkpoint-row-template");
+      const checkpointOptions = JSON.parse(
+        document.getElementById("checkpoint-options-data")?.textContent || "[]"
+      );
+
+      function getSelectedCheckpointValues() {
+        return Array.from(
+          checkpointList.querySelectorAll('select[name="checkpoint_paths"]'),
+          (select) => select.value
+        ).filter(Boolean);
+      }
+
+      function rebuildCheckpointOptions() {
+        const selects = checkpointList.querySelectorAll('select[name="checkpoint_paths"]');
+        const selectedValues = getSelectedCheckpointValues();
+
+        selects.forEach((select) => {
+          const currentValue = select.value;
+          const availableValues = new Set(
+            selectedValues.filter((value) => value !== currentValue)
+          );
+
+          select.innerHTML = "";
+
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = "Select a checkpoint";
+          select.appendChild(placeholder);
+
+          checkpointOptions.forEach((option) => {
+            if (availableValues.has(option.value)) {
+              return;
+            }
+
+            const optionElement = document.createElement("option");
+            optionElement.value = option.value;
+            optionElement.textContent = option.label;
+            optionElement.selected = option.value === currentValue;
+            select.appendChild(optionElement);
+          });
+        });
+      }
 
       function updateCheckpointLabels() {
         const rows = checkpointList.querySelectorAll(".checkpoint-row");
@@ -394,6 +442,7 @@
         const fragment = checkpointTemplate.content.cloneNode(true);
         checkpointList.appendChild(fragment);
         updateCheckpointLabels();
+        rebuildCheckpointOptions();
       });
 
       checkpointList?.addEventListener("click", (event) => {
@@ -409,9 +458,20 @@
 
         row.remove();
         updateCheckpointLabels();
+        rebuildCheckpointOptions();
+      });
+
+      checkpointList?.addEventListener("change", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLSelectElement) || target.name !== "checkpoint_paths") {
+          return;
+        }
+
+        rebuildCheckpointOptions();
       });
 
       updateCheckpointLabels();
+      rebuildCheckpointOptions();
     </script>
   </body>
 </html>
