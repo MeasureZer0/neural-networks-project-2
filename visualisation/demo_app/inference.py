@@ -327,6 +327,7 @@ def run_inference(
     image_bytes: bytes,
     mask_bytes: bytes | None = None,
     source_label: str | None = None,
+    render_images: bool = True,
 ) -> dict[str, Any]:
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     original_size = image.size
@@ -375,6 +376,15 @@ def run_inference(
         error_map_b64 = image_to_base64(error_map)
         error_rate_pct = (1.0 - agreement) * 100.0
 
+    images = {
+        "input": image_to_base64(image_np) if render_images else None,
+        "prediction": image_to_base64(mask_rgb) if render_images else None,
+        "overlay": image_to_base64(overlay) if render_images else None,
+        "confidence": image_to_base64(confidence_rgb) if render_images else None,
+        "ground_truth": ground_truth_b64 if render_images else None,
+        "error_map": error_map_b64 if render_images else None,
+    }
+
     checkpoint = loaded_model.checkpoint
     return {
         "checkpoint": {
@@ -391,14 +401,7 @@ def run_inference(
         "summary": summarize_prediction(prediction_np, confidence_np),
         "metrics": metrics,
         "inference_ms": inference_ms,
-        "images": {
-            "input": image_to_base64(image_np),
-            "prediction": image_to_base64(mask_rgb),
-            "overlay": image_to_base64(overlay),
-            "confidence": image_to_base64(confidence_rgb),
-            "ground_truth": ground_truth_b64,
-            "error_map": error_map_b64,
-        },
+        "images": images,
         "diagnostics": {
             "error_rate_pct": error_rate_pct,
         },

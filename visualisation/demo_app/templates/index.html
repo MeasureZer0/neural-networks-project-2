@@ -30,6 +30,18 @@
 
       <section class="card form-card">
         <form method="post" enctype="multipart/form-data" class="controls">
+          <label class="field">
+            <span>Mode</span>
+            <select name="mode" id="mode-select">
+              <option value="interactive" {% if selected_mode == "interactive" %}selected{% endif %}>
+                Interactive sample
+              </option>
+              <option value="benchmark" {% if selected_mode == "benchmark" %}selected{% endif %}>
+                Full benchmark
+              </option>
+            </select>
+          </label>
+
           <section class="field field-wide checkpoint-manager">
             <div class="checkpoint-manager-header">
               <div>
@@ -83,7 +95,7 @@
             </select>
           </label>
 
-          <div class="field field-wide">
+          <div class="field field-wide mode-interactive-only">
             <div class="sample-picker-header">
               <span>LandCover test sample</span>
               <button type="button" class="ghost-button favorite-button" id="toggle-sample-favorite">
@@ -105,22 +117,226 @@
           </div>
 
           <label class="field">
+            <span>Benchmark image count</span>
+            <input
+              type="number"
+              name="benchmark_count"
+              min="1"
+              max="{{ sample_count }}"
+              value="{{ selected_benchmark_count }}"
+            />
+          </label>
+
+          <label class="field mode-interactive-only">
             <span>Custom image</span>
             <input type="file" name="image_file" accept="image/*" />
           </label>
 
-          <label class="field">
+          <label class="field mode-interactive-only">
             <span>Custom mask (optional)</span>
             <input type="file" name="mask_file" accept="image/png,image/*" />
           </label>
 
-          <button type="submit" class="primary-button">Run Model</button>
+          <button type="submit" class="primary-button" id="submit-button">
+            {{ "Run Benchmark" if selected_mode == "benchmark" else "Run Model" }}
+          </button>
         </form>
 
         {% if error %}
         <div class="alert error">{{ error }}</div>
         {% endif %}
       </section>
+
+      {% if benchmark %}
+      <section class="results-grid">
+        <article class="card stat-card">
+          <p class="eyebrow">Benchmark</p>
+          <h2>{{ benchmark.actual_count }} test images</h2>
+          <div class="stats">
+            <div>
+              <span>Split</span>
+              <strong>{{ benchmark.split_name }}</strong>
+            </div>
+            <div>
+              <span>Models</span>
+              <strong>{{ benchmark.models|length }}</strong>
+            </div>
+            <div>
+              <span>Available</span>
+              <strong>{{ benchmark.available_count }}</strong>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="card table-card comparison-summary-card">
+        <p class="eyebrow">Leaderboard</p>
+        <div class="horizontal-scroll">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                {% for model in benchmark.models %}
+                <th>Rank {{ loop.index }}<br /><span>{{ model.config_name }}</span></th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Architecture</td>
+                {% for model in benchmark.models %}
+                <td>{{ model.model_name }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Device</td>
+                {% for model in benchmark.models %}
+                <td>{{ model.device }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean IoU</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.3f"|format(model.mean_iou) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean Dice</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.3f"|format(model.mean_dice) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Pixel accuracy</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.3f"|format(model.pixel_accuracy) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean confidence</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.3f"|format(model.mean_confidence) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Low-confidence pixels</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.1f"|format(model.low_confidence_pct) }}%</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Error pixels</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.1f"|format(model.error_rate_pct) }}%</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean latency</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.2f"|format(model.latency_ms_mean) }} ms</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Median latency</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.2f"|format(model.latency_ms_median) }} ms</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>p95 latency</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.2f"|format(model.latency_ms_p95) }} ms</td>
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="horizontal-scroll">
+        <section class="model-results-grid compare-tables horizontal-grid">
+          {% for model in benchmark.models %}
+          <article class="card table-card">
+            <h3>{{ model.config_name }} per-class benchmark</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>IoU</th>
+                  <th>Dice</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in model.per_class %}
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ "%.3f"|format(row.iou) }}</td>
+                  <td>{{ "%.3f"|format(row.dice) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+          {% endfor %}
+        </section>
+      </div>
+
+      <div class="horizontal-scroll">
+        <section class="model-results-grid compare-tables horizontal-grid">
+          {% for model in benchmark.models %}
+          <article class="card table-card">
+            <h3>{{ model.config_name }} hardest samples</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Sample</th>
+                  <th>Mean IoU</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in model.worst_samples %}
+                <tr>
+                  <td>{{ row.sample_id }}</td>
+                  <td>{{ "%.3f"|format(row.mean_iou) }}</td>
+                  <td>{{ "%.1f"|format(row.error_rate_pct) }}%</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+          {% endfor %}
+        </section>
+      </div>
+
+      <div class="horizontal-scroll">
+        <section class="model-results-grid compare-tables horizontal-grid">
+          {% for model in benchmark.models %}
+          <article class="card table-card">
+            <h3>{{ model.config_name }} best samples</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Sample</th>
+                  <th>Mean IoU</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in model.best_samples %}
+                <tr>
+                  <td>{{ row.sample_id }}</td>
+                  <td>{{ "%.3f"|format(row.mean_iou) }}</td>
+                  <td>{{ "%.1f"|format(row.error_rate_pct) }}%</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+          {% endfor %}
+        </section>
+      </div>
+      {% endif %}
 
       {% if results %}
       {% set primary_result = results[0] %}
@@ -396,7 +612,9 @@
       const checkpointList = document.getElementById("checkpoint-list");
       const addCheckpointButton = document.getElementById("add-checkpoint");
       const checkpointTemplate = document.getElementById("checkpoint-row-template");
+      const modeSelect = document.getElementById("mode-select");
       const sampleSelect = document.getElementById("sample-id-select");
+      const submitButton = document.getElementById("submit-button");
       const toggleSampleFavoriteButton = document.getElementById("toggle-sample-favorite");
       const checkpointOptions = JSON.parse(
         document.getElementById("checkpoint-options-data")?.textContent || "[]"
@@ -531,6 +749,16 @@
         });
       }
 
+      function updateModeVisibility() {
+        const isBenchmark = modeSelect?.value === "benchmark";
+        document.querySelectorAll(".mode-interactive-only").forEach((element) => {
+          element.classList.toggle("is-hidden", isBenchmark);
+        });
+        if (submitButton) {
+          submitButton.textContent = isBenchmark ? "Run Benchmark" : "Run Model";
+        }
+      }
+
       addCheckpointButton?.addEventListener("click", () => {
         const fragment = checkpointTemplate.content.cloneNode(true);
         checkpointList.appendChild(fragment);
@@ -573,6 +801,10 @@
         updateFavoriteButtonState();
       });
 
+      modeSelect?.addEventListener("change", () => {
+        updateModeVisibility();
+      });
+
       checkpointList?.addEventListener("change", (event) => {
         const target = event.target;
         if (!(target instanceof HTMLSelectElement) || target.name !== "checkpoint_paths") {
@@ -585,6 +817,7 @@
       updateCheckpointLabels();
       rebuildCheckpointOptions();
       renderSampleOptions();
+      updateModeVisibility();
     </script>
   </body>
 </html>

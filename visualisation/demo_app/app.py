@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from statistics import mean
 from typing import Any
 
 from flask import Flask, render_template, request
@@ -58,8 +59,11 @@ def build_base_context() -> dict[str, Any]:
         "selected_device": "auto",
         "selected_checkpoint_paths": [default_checkpoint] if default_checkpoint else [""],
         "selected_sample_id": "",
+        "selected_mode": "interactive",
+        "selected_benchmark_count": min(len(samples), 25) if samples else 0,
         "result": None,
         "results": [],
+        "benchmark": None,
         "error": None,
     }
 
@@ -147,6 +151,137 @@ def run_comparison(
     return results
 
 
+def resolve_benchmark_samples(
+    samples: list[DatasetSample],
+    requested_count: int,
+) -> list[DatasetSample]:
+    if requested_count <= 0:
+        raise ValueError("Benchmark image count must be at least 1.")
+    return samples[: min(requested_count, len(samples))]
+
+
+def _mean_or_zero(values: list[float]) -> float:
+    return mean(values) if values else 0.0
+
+
+def run_benchmark(
+    checkpoint_paths: list[str],
+    requested_device: str,
+    samples: list[DatasetSample],
+    benchmark_count: int,
+) -> dict[str, Any]:
+    unique_paths: list[str] = []
+    for checkpoint_path in checkpoint_paths:
+        if checkpoint_path and checkpoint_path not in unique_paths:
+            unique_paths.append(checkpoint_path)
+
+    if not unique_paths:
+        raise ValueError("Choose at least one checkpoint for the benchmark.")
+    if not samples:
+        raise ValueError("No test samples are available for benchmarking.")
+
+    benchmark_samples = resolve_benchmark_samples(samples, benchmark_count)
+    model_reports: list[dict[str, Any]] = []
+
+    for checkpoint_path in unique_paths:
+        loaded_model = _get_loaded_model(checkpoint_path, requested_device)
+        sample_reports: list[dict[str, Any]] = []
+
+        for sample in benchmark_samples:
+            result = run_inference(
+                loaded_model=loaded_model,
+                image_bytes=sample.image_path.read_bytes(),
+                mask_bytes=sample.mask_path.read_bytes(),
+                source_label=sample.sample_id,
+                render_images=False,
+            )
+            sample_reports.append(
+                {
+                    "sample_id": sample.sample_id,
+                    "mean_iou": result["metrics"]["mean_iou"],
+                    "mean_dice": result["metrics"]["mean_dice"],
+                    "pixel_accuracy": result["metrics"]["pixel_accuracy"],
+                    "inference_ms": result["inference_ms"],
+                    "mean_confidence": result["summary"]["mean_confidence"],
+                    "low_confidence_pct": result["summary"]["low_confidence_pct"],
+                    "error_rate_pct": result["diagnostics"]["error_rate_pct"] or 0.0,
+                    "per_class": result["metrics"]["per_class"],
+                }
+            )
+
+        per_class_rows: list[dict[str, Any]] = []
+        class_names = [row["name"] for row in sample_reports[0]["per_class"]]
+        for class_index, class_name in enumerate(class_names):
+            per_class_rows.append(
+                {
+                    "name": class_name,
+                    "iou": _mean_or_zero(
+                        [
+                            sample_report["per_class"][class_index]["iou"]
+                            for sample_report in sample_reports
+                        ]
+                    ),
+                    "dice": _mean_or_zero(
+                        [
+                            sample_report["per_class"][class_index]["dice"]
+                            for sample_report in sample_reports
+                        ]
+                    ),
+                }
+            )
+
+        ranked_by_iou = sorted(
+            sample_reports,
+            key=lambda sample_report: sample_report["mean_iou"],
+        )
+        latency_values = [sample_report["inference_ms"] for sample_report in sample_reports]
+        latency_values_sorted = sorted(latency_values)
+        p95_index = max(0, min(len(latency_values_sorted) - 1, int(len(latency_values_sorted) * 0.95) - 1))
+
+        model_reports.append(
+            {
+                "checkpoint": str(loaded_model.checkpoint_path),
+                "config_name": type(loaded_model.config).__name__,
+                "model_name": getattr(loaded_model.config, "model", "unknown"),
+                "device": loaded_model.device,
+                "images_benchmarked": len(sample_reports),
+                "mean_iou": _mean_or_zero(
+                    [sample_report["mean_iou"] for sample_report in sample_reports]
+                ),
+                "mean_dice": _mean_or_zero(
+                    [sample_report["mean_dice"] for sample_report in sample_reports]
+                ),
+                "pixel_accuracy": _mean_or_zero(
+                    [sample_report["pixel_accuracy"] for sample_report in sample_reports]
+                ),
+                "mean_confidence": _mean_or_zero(
+                    [sample_report["mean_confidence"] for sample_report in sample_reports]
+                ),
+                "low_confidence_pct": _mean_or_zero(
+                    [sample_report["low_confidence_pct"] for sample_report in sample_reports]
+                ),
+                "error_rate_pct": _mean_or_zero(
+                    [sample_report["error_rate_pct"] for sample_report in sample_reports]
+                ),
+                "latency_ms_mean": _mean_or_zero(latency_values),
+                "latency_ms_median": latency_values_sorted[len(latency_values_sorted) // 2],
+                "latency_ms_p95": latency_values_sorted[p95_index],
+                "per_class": per_class_rows,
+                "best_samples": list(reversed(ranked_by_iou[-5:])),
+                "worst_samples": ranked_by_iou[:5],
+            }
+        )
+
+    model_reports.sort(key=lambda report: report["mean_iou"], reverse=True)
+    return {
+        "split_name": "test",
+        "requested_count": benchmark_count,
+        "actual_count": len(benchmark_samples),
+        "available_count": len(samples),
+        "models": model_reports,
+    }
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
@@ -164,20 +299,33 @@ def create_app() -> Flask:
             ]
             requested_device = request.form.get("device", "auto")
             sample_id = request.form.get("sample_id", "").strip()
+            selected_mode = request.form.get("mode", "interactive").strip() or "interactive"
+            benchmark_count_raw = request.form.get("benchmark_count", "").strip()
+            benchmark_count = int(benchmark_count_raw or context["selected_benchmark_count"] or 0)
 
             context["selected_checkpoint_paths"] = checkpoint_paths or [""]
             context["selected_device"] = requested_device
             context["selected_sample_id"] = sample_id
+            context["selected_mode"] = selected_mode
+            context["selected_benchmark_count"] = benchmark_count
 
             try:
-                results = run_comparison(
-                    checkpoint_paths=checkpoint_paths,
-                    requested_device=requested_device,
-                    sample_id=sample_id,
-                    samples=samples,
-                )
-                context["results"] = results
-                context["result"] = results[0]
+                if selected_mode == "benchmark":
+                    context["benchmark"] = run_benchmark(
+                        checkpoint_paths=checkpoint_paths,
+                        requested_device=requested_device,
+                        samples=samples,
+                        benchmark_count=benchmark_count,
+                    )
+                else:
+                    results = run_comparison(
+                        checkpoint_paths=checkpoint_paths,
+                        requested_device=requested_device,
+                        sample_id=sample_id,
+                        samples=samples,
+                    )
+                    context["results"] = results
+                    context["result"] = results[0]
             except Exception as exc:  # noqa: BLE001
                 context["error"] = str(exc)
 
