@@ -16,7 +16,12 @@
     />
   </head>
   <body>
-    <main class="shell">
+    <main
+      class="shell"
+      id="app-shell"
+      data-current-run-mode="{% if benchmark %}benchmark{% elif results %}interactive{% else %}{% endif %}"
+      data-current-run-label="{% if benchmark %}{{ benchmark.actual_count }} image benchmark{% elif result %}{{ result.source or 'Custom upload' }}{% else %}{% endif %}"
+    >
       <section class="hero card">
         <p class="eyebrow">Flask App</p>
         <h1>Interactive Semantic Segmentation Showcase</h1>
@@ -151,6 +156,25 @@
         {% if error %}
         <div class="alert error">{{ error }}</div>
         {% endif %}
+      </section>
+
+      <section class="card memory-card is-hidden" id="recent-runs-card">
+        <div class="memory-card-header">
+          <div>
+            <p class="eyebrow">Recent Runs</p>
+            <h2>Jump Between Modes</h2>
+          </div>
+        </div>
+        <div class="memory-links">
+          <a class="memory-link" id="recent-interactive-link" href="#">
+            <span>Last interactive</span>
+            <strong id="recent-interactive-label">None yet</strong>
+          </a>
+          <a class="memory-link" id="recent-benchmark-link" href="#">
+            <span>Last benchmark</span>
+            <strong id="recent-benchmark-label">None yet</strong>
+          </a>
+        </div>
       </section>
 
       {% if loading_job %}
@@ -664,10 +688,16 @@
     </template>
     <script>
       const runForm = document.getElementById("run-form");
+      const appShell = document.getElementById("app-shell");
       const checkpointList = document.getElementById("checkpoint-list");
       const addCheckpointButton = document.getElementById("add-checkpoint");
       const checkpointTemplate = document.getElementById("checkpoint-row-template");
       const loadingCard = document.getElementById("loading-card");
+      const recentRunsCard = document.getElementById("recent-runs-card");
+      const recentInteractiveLink = document.getElementById("recent-interactive-link");
+      const recentInteractiveLabel = document.getElementById("recent-interactive-label");
+      const recentBenchmarkLink = document.getElementById("recent-benchmark-link");
+      const recentBenchmarkLabel = document.getElementById("recent-benchmark-label");
       const modeSelect = document.getElementById("mode-select");
       const loadingTitle = document.getElementById("loading-title");
       const loadingMessage = document.getElementById("loading-message");
@@ -688,6 +718,7 @@
         document.getElementById("sample-options-data")?.textContent || "[]"
       );
       const sampleFavoritesStorageKey = "demo_app.favorite_samples";
+      const recentRunsStorageKey = "demo_app.recent_runs";
 
       function getSelectedCheckpointValues() {
         return Array.from(
@@ -738,6 +769,19 @@
 
       function setFavoriteSamples(favorites) {
         localStorage.setItem(sampleFavoritesStorageKey, JSON.stringify(favorites));
+      }
+
+      function getRecentRuns() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(recentRunsStorageKey) || "{}");
+          return typeof parsed === "object" && parsed !== null ? parsed : {};
+        } catch {
+          return {};
+        }
+      }
+
+      function setRecentRuns(recentRuns) {
+        localStorage.setItem(recentRunsStorageKey, JSON.stringify(recentRuns));
       }
 
       function renderSampleOptions() {
@@ -822,6 +866,54 @@
         if (submitButton) {
           submitButton.textContent = isBenchmark ? "Run Benchmark" : "Run Model";
         }
+      }
+
+      function updateRecentRunsUI() {
+        if (!recentRunsCard) {
+          return;
+        }
+
+        const recentRuns = getRecentRuns();
+        const interactiveRun = recentRuns.interactive;
+        const benchmarkRun = recentRuns.benchmark;
+
+        if (interactiveRun?.url && recentInteractiveLink && recentInteractiveLabel) {
+          recentInteractiveLink.href = interactiveRun.url;
+          recentInteractiveLink.classList.remove("is-disabled");
+          recentInteractiveLabel.textContent = interactiveRun.label || "Saved run";
+        } else if (recentInteractiveLink && recentInteractiveLabel) {
+          recentInteractiveLink.removeAttribute("href");
+          recentInteractiveLink.classList.add("is-disabled");
+          recentInteractiveLabel.textContent = "None yet";
+        }
+
+        if (benchmarkRun?.url && recentBenchmarkLink && recentBenchmarkLabel) {
+          recentBenchmarkLink.href = benchmarkRun.url;
+          recentBenchmarkLink.classList.remove("is-disabled");
+          recentBenchmarkLabel.textContent = benchmarkRun.label || "Saved run";
+        } else if (recentBenchmarkLink && recentBenchmarkLabel) {
+          recentBenchmarkLink.removeAttribute("href");
+          recentBenchmarkLink.classList.add("is-disabled");
+          recentBenchmarkLabel.textContent = "None yet";
+        }
+
+        const hasAnyRun = Boolean(interactiveRun?.url || benchmarkRun?.url);
+        recentRunsCard.classList.toggle("is-hidden", !hasAnyRun);
+      }
+
+      function rememberCurrentRun() {
+        const currentMode = appShell?.dataset.currentRunMode;
+        const currentLabel = appShell?.dataset.currentRunLabel;
+        if (!currentMode || !currentLabel) {
+          return;
+        }
+
+        const recentRuns = getRecentRuns();
+        recentRuns[currentMode] = {
+          url: window.location.pathname,
+          label: currentLabel,
+        };
+        setRecentRuns(recentRuns);
       }
 
       function renderProgress(progress) {
@@ -994,6 +1086,8 @@
       rebuildCheckpointOptions();
       renderSampleOptions();
       updateModeVisibility();
+      rememberCurrentRun();
+      updateRecentRunsUI();
       if (loadingCard) {
         scrollToLoadingCard();
         pollJob();
