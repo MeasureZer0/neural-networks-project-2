@@ -16,52 +16,84 @@
     />
   </head>
   <body>
-    <main class="shell">
+    <main
+      class="shell"
+      id="app-shell"
+      data-current-run-mode="{% if benchmark %}benchmark{% elif results %}interactive{% else %}{% endif %}"
+      data-current-run-label="{% if benchmark %}{{ benchmark.actual_count }} image benchmark{% elif result %}{{ result.source or 'Custom upload' }}{% else %}{% endif %}"
+    >
       <section class="hero card">
         <p class="eyebrow">Flask App</p>
         <h1>Interactive Semantic Segmentation Showcase</h1>
         <p class="lede">
-          Pick a trained checkpoint from this repo, run it on a LandCover test
-          chip with its paired mask, or switch to a custom upload and inspect
-          the predicted mask, overlay, and per-image metrics.
+          Pick one or more trained checkpoints from this repo, run them on a
+          LandCover test chip with its paired mask, or switch to a custom
+          upload and inspect the predicted masks, overlays, and per-image
+          metrics in a responsive comparison grid.
         </p>
       </section>
 
       <section class="card form-card">
-        <form method="post" enctype="multipart/form-data" class="controls">
-          <label class="field field-wide">
-            <span>Checkpoint</span>
-            <select name="checkpoint_path">
-              <option value="">Select a checkpoint</option>
-              {% for checkpoint in checkpoint_options %}
-              {% set checkpoint_value = selected_checkpoint or default_checkpoint %}
-              <option
-                value="{{ checkpoint.path }}"
-                {% if checkpoint_value == checkpoint.path %}selected{% endif %}
-              >
-                {{ checkpoint.label }}
+        <form
+          method="post"
+          action="{{ url_for('create_job') }}"
+          enctype="multipart/form-data"
+          class="controls"
+          id="run-form"
+        >
+          <label class="field">
+            <span>Mode</span>
+            <select name="mode" id="mode-select">
+              <option value="interactive" {% if selected_mode == "interactive" %}selected{% endif %}>
+                Interactive sample
               </option>
-              {% endfor %}
+              <option value="benchmark" {% if selected_mode == "benchmark" %}selected{% endif %}>
+                Full benchmark
+              </option>
             </select>
           </label>
 
-          <label class="field field-wide">
-            <span>Compare with checkpoint</span>
-            <select name="compare_checkpoint_path">
-              <option value="">Single-checkpoint view</option>
-              {% for checkpoint in checkpoint_options %}
-              <option
-                value="{{ checkpoint.path }}"
-                {% if selected_compare_checkpoint == checkpoint.path %}selected{% endif %}
-              >
-                {{ checkpoint.label }}
-              </option>
+          <section class="field field-wide checkpoint-manager">
+            <div class="checkpoint-manager-header">
+              <div>
+                <span>Checkpoints</span>
+                <small class="field-note">
+                  Add as many model checkpoints as you want. Duplicates are ignored before inference.
+                </small>
+              </div>
+              <button type="button" class="secondary-button" id="add-checkpoint">
+                Add model
+              </button>
+            </div>
+
+            <div id="checkpoint-list" class="checkpoint-list">
+              {% for checkpoint_value in selected_checkpoint_paths %}
+              <div class="checkpoint-row">
+                <label class="field">
+                  <span>Model {{ loop.index }}</span>
+                  <select name="checkpoint_paths">
+                    <option value="">Select a checkpoint</option>
+                    {% for checkpoint in checkpoint_options %}
+                    <option
+                      value="{{ checkpoint.path }}"
+                      {% if checkpoint_value == checkpoint.path %}selected{% endif %}
+                    >
+                      {{ checkpoint.label }}
+                    </option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  class="ghost-button remove-checkpoint"
+                  {% if loop.length == 1 %}disabled{% endif %}
+                >
+                  Remove
+                </button>
+              </div>
               {% endfor %}
-            </select>
-            <small class="field-note">
-              Choose a second checkpoint to run the same image through both models side by side.
-            </small>
-          </label>
+            </div>
+          </section>
 
           <label class="field">
             <span>Device</span>
@@ -74,9 +106,14 @@
             </select>
           </label>
 
-          <label class="field field-wide">
-            <span>LandCover test sample</span>
-            <select name="sample_id">
+          <div class="field field-wide mode-interactive-only">
+            <div class="sample-picker-header">
+              <span>LandCover test sample</span>
+              <button type="button" class="ghost-button favorite-button" id="toggle-sample-favorite">
+                Add to favorites
+              </button>
+            </div>
+            <select name="sample_id" id="sample-id-select">
               <option value="">Custom upload instead</option>
               {% for sample in sample_options %}
               <option value="{{ sample.sample_id }}" {% if selected_sample_id == sample.sample_id %}selected{% endif %}>
@@ -88,25 +125,296 @@
               Loaded from `test.txt` and matched to `output/&lt;sample&gt;.jpg` plus `output/&lt;sample&gt;_m.png`.
               {{ sample_count }} samples available from {{ dataset_root }}.
             </small>
-          </label>
+          </div>
 
           <label class="field">
+            <span>Benchmark image count</span>
+            <input
+              type="number"
+              name="benchmark_count"
+              min="1"
+              max="{{ sample_count }}"
+              value="{{ selected_benchmark_count }}"
+            />
+          </label>
+
+          <label class="field mode-interactive-only">
             <span>Custom image</span>
             <input type="file" name="image_file" accept="image/*" />
           </label>
 
-          <label class="field">
+          <label class="field mode-interactive-only">
             <span>Custom mask (optional)</span>
             <input type="file" name="mask_file" accept="image/png,image/*" />
           </label>
 
-          <button type="submit" class="primary-button">Run Model</button>
+          <button type="submit" class="primary-button" id="submit-button">
+            {{ "Run Benchmark" if selected_mode == "benchmark" else "Run Model" }}
+          </button>
         </form>
 
         {% if error %}
         <div class="alert error">{{ error }}</div>
         {% endif %}
       </section>
+
+      <section class="card memory-card is-hidden" id="recent-runs-card">
+        <div class="memory-card-header">
+          <div>
+            <p class="eyebrow">Recent Runs</p>
+            <h2>Jump Between Modes</h2>
+          </div>
+        </div>
+        <div class="memory-links">
+          <a class="memory-link" id="recent-interactive-link" href="#">
+            <span>Last interactive</span>
+            <strong id="recent-interactive-label">None yet</strong>
+          </a>
+          <a class="memory-link" id="recent-benchmark-link" href="#">
+            <span>Last benchmark</span>
+            <strong id="recent-benchmark-label">None yet</strong>
+          </a>
+        </div>
+      </section>
+
+      {% if loading_job %}
+      <section
+        class="card loading-card"
+        id="loading-card"
+        data-status-url="{{ url_for('job_status', job_id=loading_job.job_id) }}"
+        data-redirect-url="{{ url_for('job_page', job_id=loading_job.job_id) }}"
+      >
+        <p class="eyebrow">Loading</p>
+        <h2 id="loading-title">
+          {{ "Running benchmark" if selected_mode == "benchmark" else "Running models" }}
+        </h2>
+        <p class="lede" id="loading-message">{{ loading_job.current_message }}</p>
+        <div class="progress-track" aria-hidden="true">
+          <div
+            class="progress-bar"
+            id="progress-bar"
+            style="width: {{ loading_job.progress_pct }}%;"
+          ></div>
+        </div>
+        <div class="progress-meta">
+          <strong id="progress-percent">{{ loading_job.progress_pct }}%</strong>
+          <div class="progress-meta-secondary">
+            <span id="progress-steps">
+              {{ loading_job.completed_steps }} / {{ loading_job.total_steps }} steps
+            </span>
+            <span id="progress-elapsed">
+              Elapsed: {{ "%.0f"|format(loading_job.elapsed_seconds) }}s
+            </span>
+            <span id="progress-eta">
+              {% if loading_job.estimated_end %}
+              Est. end: {{ loading_job.estimated_end }}
+              {% else %}
+              Est. end: calculating…
+              {% endif %}
+            </span>
+          </div>
+        </div>
+        <div class="progress-detail">
+          <span id="progress-model">
+            {{ loading_job.current_model_label if loading_job.current_model_label else "Waiting for model…" }}
+          </span>
+          <span id="progress-sample">
+            {{ loading_job.current_sample_label if loading_job.current_sample_label else "Waiting for image…" }}
+          </span>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if benchmark %}
+      <section class="results-grid">
+        <article class="card stat-card">
+          <p class="eyebrow">Benchmark</p>
+          <h2>{{ benchmark.actual_count }} test images</h2>
+          <div class="stats">
+            <div>
+              <span>Split</span>
+              <strong>{{ benchmark.split_name }}</strong>
+            </div>
+            <div>
+              <span>Models</span>
+              <strong>{{ benchmark.models|length }}</strong>
+            </div>
+            <div>
+              <span>Available</span>
+              <strong>{{ benchmark.available_count }}</strong>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="card table-card comparison-summary-card">
+        <p class="eyebrow">Leaderboard</p>
+        <div class="horizontal-scroll">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                {% for model in benchmark.models %}
+                <th>Rank {{ loop.index }}<br /><span>{{ model.config_name }}</span></th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Architecture</td>
+                {% for model in benchmark.models %}
+                <td>{{ model.model_name }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Device</td>
+                {% for model in benchmark.models %}
+                <td>{{ model.device }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean IoU</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.3f"|format(model.mean_iou) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean Dice</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.3f"|format(model.mean_dice) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Pixel accuracy</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.3f"|format(model.pixel_accuracy) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean confidence</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.3f"|format(model.mean_confidence) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Low-confidence pixels</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.1f"|format(model.low_confidence_pct) }}%</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Error pixels</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.1f"|format(model.error_rate_pct) }}%</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean latency</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.2f"|format(model.latency_ms_mean) }} ms</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Median latency</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.2f"|format(model.latency_ms_median) }} ms</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>p95 latency</td>
+                {% for model in benchmark.models %}
+                <td>{{ "%.2f"|format(model.latency_ms_p95) }} ms</td>
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="horizontal-scroll">
+        <section class="model-results-grid compare-tables horizontal-grid">
+          {% for model in benchmark.models %}
+          <article class="card table-card">
+            <h3>{{ model.config_name }} per-class benchmark</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>IoU</th>
+                  <th>Dice</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in model.per_class %}
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td>{{ "%.3f"|format(row.iou) }}</td>
+                  <td>{{ "%.3f"|format(row.dice) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+          {% endfor %}
+        </section>
+      </div>
+
+      <div class="horizontal-scroll">
+        <section class="model-results-grid compare-tables horizontal-grid">
+          {% for model in benchmark.models %}
+          <article class="card table-card">
+            <h3>{{ model.config_name }} hardest samples</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Sample</th>
+                  <th>Mean IoU</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in model.worst_samples %}
+                <tr>
+                  <td>{{ row.sample_id }}</td>
+                  <td>{{ "%.3f"|format(row.mean_iou) }}</td>
+                  <td>{{ "%.1f"|format(row.error_rate_pct) }}%</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+          {% endfor %}
+        </section>
+      </div>
+
+      <div class="horizontal-scroll">
+        <section class="model-results-grid compare-tables horizontal-grid">
+          {% for model in benchmark.models %}
+          <article class="card table-card">
+            <h3>{{ model.config_name }} best samples</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Sample</th>
+                  <th>Mean IoU</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in model.best_samples %}
+                <tr>
+                  <td>{{ row.sample_id }}</td>
+                  <td>{{ "%.3f"|format(row.mean_iou) }}</td>
+                  <td>{{ "%.1f"|format(row.error_rate_pct) }}%</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </article>
+          {% endfor %}
+        </section>
+      </div>
+      {% endif %}
 
       {% if results %}
       {% set primary_result = results[0] %}
@@ -127,92 +435,118 @@
         </article>
       </section>
 
-      <section class="model-results-grid">
-        {% for result in results %}
-        <div class="model-results-column">
-          <article class="card stat-card">
-            <p class="eyebrow">Checkpoint {{ loop.index }}</p>
-            <h2>{{ result.checkpoint.config_name }}</h2>
-            <div class="stats">
-              <div>
-                <span>Architecture</span>
-                <strong>{{ result.checkpoint.model_name }}</strong>
-              </div>
-              <div>
-                <span>Device</span>
-                <strong>{{ result.checkpoint.device }}</strong>
-              </div>
-              <div>
-                <span>Input size</span>
-                <strong>{{ result.checkpoint.img_size }}</strong>
-              </div>
-              <div>
-                <span>Epoch</span>
-                <strong>{{ result.checkpoint.epoch }}</strong>
-              </div>
-              <div>
-                <span>Train loss</span>
-                <strong>{{ "%.4f"|format(result.checkpoint.train_loss or 0) }}</strong>
-              </div>
-              <div>
-                <span>Val loss</span>
-                <strong>{{ "%.4f"|format(result.checkpoint.val_loss or 0) }}</strong>
-              </div>
-            </div>
-            <p class="path">{{ result.checkpoint.path }}</p>
-          </article>
-
-          <article class="card stat-card">
-            <p class="eyebrow">Prediction Summary</p>
-            <h2>{{ "%.2f"|format(result.inference_ms) }} ms</h2>
-            <div class="stats">
-              <div>
-                <span>Mean confidence</span>
-                <strong>{{ "%.3f"|format(result.summary.mean_confidence) }}</strong>
-              </div>
-              <div>
-                <span>Low-confidence pixels</span>
-                <strong>{{ "%.1f"|format(result.summary.low_confidence_pct) }}%</strong>
-              </div>
-              {% if result.summary.dominant_class %}
-              <div>
-                <span>Dominant class</span>
-                <strong>{{ result.summary.dominant_class.name }}</strong>
-              </div>
-              <div>
-                <span>Coverage</span>
-                <strong>{{ "%.1f"|format(result.summary.dominant_class.coverage_pct) }}%</strong>
-              </div>
-              {% endif %}
-            </div>
-          </article>
-
-          {% if result.metrics %}
-          <article class="card stat-card">
-            <p class="eyebrow">Per-Image Metrics</p>
-            <h2>Mask evaluation</h2>
-            <div class="stats">
-              <div>
-                <span>Pixel accuracy</span>
-                <strong>{{ "%.3f"|format(result.metrics.pixel_accuracy) }}</strong>
-              </div>
-              <div>
-                <span>Mean IoU</span>
-                <strong>{{ "%.3f"|format(result.metrics.mean_iou) }}</strong>
-              </div>
-              <div>
-                <span>Mean Dice</span>
-                <strong>{{ "%.3f"|format(result.metrics.mean_dice) }}</strong>
-              </div>
-              <div>
-                <span>Error pixels</span>
-                <strong>{{ "%.1f"|format(result.diagnostics.error_rate_pct or 0) }}%</strong>
-              </div>
-            </div>
-          </article>
-          {% endif %}
+      <section class="card table-card comparison-summary-card">
+        <p class="eyebrow">Model Comparison</p>
+        <div class="horizontal-scroll">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                {% for result in results %}
+                <th>Model {{ loop.index }}<br /><span>{{ result.checkpoint.config_name }}</span></th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Architecture</td>
+                {% for result in results %}
+                <td>{{ result.checkpoint.model_name }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Device</td>
+                {% for result in results %}
+                <td>{{ result.checkpoint.device }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Input size</td>
+                {% for result in results %}
+                <td>{{ result.checkpoint.img_size }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Epoch</td>
+                {% for result in results %}
+                <td>{{ result.checkpoint.epoch }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Train loss</td>
+                {% for result in results %}
+                <td>{{ "%.4f"|format(result.checkpoint.train_loss or 0) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Val loss</td>
+                {% for result in results %}
+                <td>{{ "%.4f"|format(result.checkpoint.val_loss or 0) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Inference time</td>
+                {% for result in results %}
+                <td>{{ "%.2f"|format(result.inference_ms) }} ms</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean confidence</td>
+                {% for result in results %}
+                <td>{{ "%.3f"|format(result.summary.mean_confidence) }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Low-confidence pixels</td>
+                {% for result in results %}
+                <td>{{ "%.1f"|format(result.summary.low_confidence_pct) }}%</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Dominant class</td>
+                {% for result in results %}
+                <td>{{ result.summary.dominant_class.name if result.summary.dominant_class else "n/a" }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Dominant coverage</td>
+                {% for result in results %}
+                <td>
+                  {% if result.summary.dominant_class %}
+                  {{ "%.1f"|format(result.summary.dominant_class.coverage_pct) }}%
+                  {% else %}
+                  n/a
+                  {% endif %}
+                </td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Pixel accuracy</td>
+                {% for result in results %}
+                <td>{{ "%.3f"|format(result.metrics.pixel_accuracy) if result.metrics else "n/a" }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean IoU</td>
+                {% for result in results %}
+                <td>{{ "%.3f"|format(result.metrics.mean_iou) if result.metrics else "n/a" }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Mean Dice</td>
+                {% for result in results %}
+                <td>{{ "%.3f"|format(result.metrics.mean_dice) if result.metrics else "n/a" }}</td>
+                {% endfor %}
+              </tr>
+              <tr>
+                <td>Error pixels</td>
+                {% for result in results %}
+                <td>{{ "%.1f"|format(result.diagnostics.error_rate_pct or 0) if result.metrics else "n/a" }}%</td>
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
         </div>
-        {% endfor %}
       </section>
 
       <section class="gallery">
@@ -228,44 +562,46 @@
         {% endif %}
       </section>
 
-      <section class="compare-gallery">
-        {% for result in results %}
-        <article class="card compare-card">
-          <div class="compare-card-header">
-            <p class="eyebrow">Model {{ loop.index }}</p>
-            <h3>{{ result.checkpoint.config_name }}</h3>
-            <p class="path">{{ result.checkpoint.model_name }} on {{ result.checkpoint.device }}</p>
-          </div>
+      <div class="horizontal-scroll">
+        <section class="compare-gallery horizontal-grid">
+          {% for result in results %}
+          <article class="card compare-card">
+            <div class="compare-card-header">
+              <p class="eyebrow">Model {{ loop.index }}</p>
+              <h3>{{ result.checkpoint.config_name }}</h3>
+              <p class="path">{{ result.checkpoint.model_name }} on {{ result.checkpoint.device }}</p>
+            </div>
 
-          <div class="compare-images">
-            <div class="compare-image-panel">
-              <h4>Predicted mask</h4>
-              <img src="data:image/png;base64,{{ result.images.prediction }}" alt="Predicted mask for {{ result.checkpoint.config_name }}" />
+            <div class="compare-images">
+              <div class="compare-image-panel">
+                <h4>Predicted mask</h4>
+                <img src="data:image/png;base64,{{ result.images.prediction }}" alt="Predicted mask for {{ result.checkpoint.config_name }}" />
+              </div>
+              <div class="compare-image-panel">
+                <h4>Overlay</h4>
+                <img src="data:image/png;base64,{{ result.images.overlay }}" alt="Prediction overlay for {{ result.checkpoint.config_name }}" />
+              </div>
+              <div class="compare-image-panel">
+                <h4>Confidence map</h4>
+                <img src="data:image/png;base64,{{ result.images.confidence }}" alt="Confidence heatmap for {{ result.checkpoint.config_name }}" />
+                <p class="caption">Red indicates lower confidence, blue indicates higher confidence.</p>
+              </div>
+              {% if result.images.error_map %}
+              <div class="compare-image-panel">
+                <h4>Error map</h4>
+                <img src="data:image/png;base64,{{ result.images.error_map }}" alt="Prediction error map for {{ result.checkpoint.config_name }}" />
+                <p class="caption">Red pixels disagree with the reference mask.</p>
+              </div>
+              {% endif %}
             </div>
-            <div class="compare-image-panel">
-              <h4>Overlay</h4>
-              <img src="data:image/png;base64,{{ result.images.overlay }}" alt="Prediction overlay for {{ result.checkpoint.config_name }}" />
-            </div>
-            <div class="compare-image-panel">
-              <h4>Confidence map</h4>
-              <img src="data:image/png;base64,{{ result.images.confidence }}" alt="Confidence heatmap for {{ result.checkpoint.config_name }}" />
-              <p class="caption">Red indicates lower confidence, blue indicates higher confidence.</p>
-            </div>
-            {% if result.images.error_map %}
-            <div class="compare-image-panel">
-              <h4>Error map</h4>
-              <img src="data:image/png;base64,{{ result.images.error_map }}" alt="Prediction error map for {{ result.checkpoint.config_name }}" />
-              <p class="caption">Red pixels disagree with the reference mask.</p>
-            </div>
-            {% endif %}
-          </div>
-        </article>
-        {% endfor %}
-      </section>
+          </article>
+          {% endfor %}
+        </section>
+      </div>
 
-      <section class="model-results-grid compare-tables">
-        {% for result in results %}
-        <div class="model-results-column">
+      <div class="horizontal-scroll">
+        <section class="model-results-grid compare-tables horizontal-grid">
+          {% for result in results %}
           <article class="card table-card">
             <h3>{{ result.checkpoint.config_name }} class coverage</h3>
             <table>
@@ -289,8 +625,13 @@
               </tbody>
             </table>
           </article>
+          {% endfor %}
+        </section>
+      </div>
 
-          {% if result.metrics %}
+      <div class="horizontal-scroll">
+        <section class="model-results-grid compare-tables horizontal-grid">
+          {% for result in results if result.metrics %}
           <article class="card table-card">
             <h3>{{ result.checkpoint.config_name }} per-class metrics</h3>
             <table>
@@ -312,11 +653,445 @@
               </tbody>
             </table>
           </article>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </section>
+          {% endfor %}
+        </section>
+      </div>
       {% endif %}
     </main>
+    <script id="checkpoint-options-data" type="application/json">
+      [
+        {% for checkpoint in checkpoint_options %}
+        {"value": {{ checkpoint.path|tojson }}, "label": {{ checkpoint.label|tojson }}}{% if not loop.last %},{% endif %}
+        {% endfor %}
+      ]
+    </script>
+    <script id="sample-options-data" type="application/json">
+      [
+        {% for sample in sample_options %}
+        {"value": {{ sample.sample_id|tojson }}, "label": {{ sample.sample_id|tojson }}}{% if not loop.last %},{% endif %}
+        {% endfor %}
+      ]
+    </script>
+    <template id="checkpoint-row-template">
+      <div class="checkpoint-row">
+        <label class="field">
+          <span>Model</span>
+          <select name="checkpoint_paths">
+            <option value="">Select a checkpoint</option>
+            {% for checkpoint in checkpoint_options %}
+            <option value="{{ checkpoint.path }}">{{ checkpoint.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="button" class="ghost-button remove-checkpoint">Remove</button>
+      </div>
+    </template>
+    <script>
+      const runForm = document.getElementById("run-form");
+      const appShell = document.getElementById("app-shell");
+      const checkpointList = document.getElementById("checkpoint-list");
+      const addCheckpointButton = document.getElementById("add-checkpoint");
+      const checkpointTemplate = document.getElementById("checkpoint-row-template");
+      const loadingCard = document.getElementById("loading-card");
+      const recentRunsCard = document.getElementById("recent-runs-card");
+      const recentInteractiveLink = document.getElementById("recent-interactive-link");
+      const recentInteractiveLabel = document.getElementById("recent-interactive-label");
+      const recentBenchmarkLink = document.getElementById("recent-benchmark-link");
+      const recentBenchmarkLabel = document.getElementById("recent-benchmark-label");
+      const modeSelect = document.getElementById("mode-select");
+      const loadingTitle = document.getElementById("loading-title");
+      const loadingMessage = document.getElementById("loading-message");
+      const progressBar = document.getElementById("progress-bar");
+      const progressPercent = document.getElementById("progress-percent");
+      const progressSteps = document.getElementById("progress-steps");
+      const progressElapsed = document.getElementById("progress-elapsed");
+      const progressEta = document.getElementById("progress-eta");
+      const progressModel = document.getElementById("progress-model");
+      const progressSample = document.getElementById("progress-sample");
+      const sampleSelect = document.getElementById("sample-id-select");
+      const submitButton = document.getElementById("submit-button");
+      const toggleSampleFavoriteButton = document.getElementById("toggle-sample-favorite");
+      const checkpointOptions = JSON.parse(
+        document.getElementById("checkpoint-options-data")?.textContent || "[]"
+      );
+      const sampleOptions = JSON.parse(
+        document.getElementById("sample-options-data")?.textContent || "[]"
+      );
+      const sampleFavoritesStorageKey = "demo_app.favorite_samples";
+      const recentRunsStorageKey = "demo_app.recent_runs";
+
+      function getSelectedCheckpointValues() {
+        return Array.from(
+          checkpointList.querySelectorAll('select[name="checkpoint_paths"]'),
+          (select) => select.value
+        ).filter(Boolean);
+      }
+
+      function rebuildCheckpointOptions() {
+        const selects = checkpointList.querySelectorAll('select[name="checkpoint_paths"]');
+        const selectedValues = getSelectedCheckpointValues();
+
+        selects.forEach((select) => {
+          const currentValue = select.value;
+          const availableValues = new Set(
+            selectedValues.filter((value) => value !== currentValue)
+          );
+
+          select.innerHTML = "";
+
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = "Select a checkpoint";
+          select.appendChild(placeholder);
+
+          checkpointOptions.forEach((option) => {
+            if (availableValues.has(option.value)) {
+              return;
+            }
+
+            const optionElement = document.createElement("option");
+            optionElement.value = option.value;
+            optionElement.textContent = option.label;
+            optionElement.selected = option.value === currentValue;
+            select.appendChild(optionElement);
+          });
+        });
+      }
+
+      function getFavoriteSamples() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(sampleFavoritesStorageKey) || "[]");
+          return Array.isArray(parsed) ? parsed.filter((value) => typeof value === "string") : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function setFavoriteSamples(favorites) {
+        localStorage.setItem(sampleFavoritesStorageKey, JSON.stringify(favorites));
+      }
+
+      function getRecentRuns() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(recentRunsStorageKey) || "{}");
+          return typeof parsed === "object" && parsed !== null ? parsed : {};
+        } catch {
+          return {};
+        }
+      }
+
+      function setRecentRuns(recentRuns) {
+        localStorage.setItem(recentRunsStorageKey, JSON.stringify(recentRuns));
+      }
+
+      function renderSampleOptions() {
+        if (!sampleSelect) {
+          return;
+        }
+
+        const selectedValue = sampleSelect.value;
+        const favorites = new Set(getFavoriteSamples());
+        const favoriteSamples = sampleOptions.filter((option) => favorites.has(option.value));
+        const regularSamples = sampleOptions.filter((option) => !favorites.has(option.value));
+
+        sampleSelect.innerHTML = "";
+
+        const customOption = document.createElement("option");
+        customOption.value = "";
+        customOption.textContent = "Custom upload instead";
+        customOption.selected = selectedValue === "";
+        sampleSelect.appendChild(customOption);
+
+        if (favoriteSamples.length > 0) {
+          const favoritesGroup = document.createElement("optgroup");
+          favoritesGroup.label = "Favorites";
+          favoriteSamples.forEach((option) => {
+            const optionElement = document.createElement("option");
+            optionElement.value = option.value;
+            optionElement.textContent = `★ ${option.label}`;
+            optionElement.selected = option.value === selectedValue;
+            favoritesGroup.appendChild(optionElement);
+          });
+          sampleSelect.appendChild(favoritesGroup);
+        }
+
+        const allGroup = document.createElement("optgroup");
+        allGroup.label = favoriteSamples.length > 0 ? "All samples" : "Samples";
+        regularSamples.forEach((option) => {
+          const optionElement = document.createElement("option");
+          optionElement.value = option.value;
+          optionElement.textContent = option.label;
+          optionElement.selected = option.value === selectedValue;
+          allGroup.appendChild(optionElement);
+        });
+        sampleSelect.appendChild(allGroup);
+
+        updateFavoriteButtonState();
+      }
+
+      function updateFavoriteButtonState() {
+        if (!toggleSampleFavoriteButton || !sampleSelect) {
+          return;
+        }
+
+        const selectedValue = sampleSelect.value;
+        const favorites = new Set(getFavoriteSamples());
+        const isFavorite = selectedValue && favorites.has(selectedValue);
+
+        toggleSampleFavoriteButton.disabled = selectedValue === "";
+        toggleSampleFavoriteButton.textContent = isFavorite
+          ? "Remove favorite"
+          : "Add to favorites";
+      }
+
+      function updateCheckpointLabels() {
+        const rows = checkpointList.querySelectorAll(".checkpoint-row");
+        rows.forEach((row, index) => {
+          const label = row.querySelector("label span");
+          const removeButton = row.querySelector(".remove-checkpoint");
+          if (label) {
+            label.textContent = `Model ${index + 1}`;
+          }
+          if (removeButton) {
+            removeButton.disabled = rows.length === 1;
+          }
+        });
+      }
+
+      function updateModeVisibility() {
+        const isBenchmark = modeSelect?.value === "benchmark";
+        document.querySelectorAll(".mode-interactive-only").forEach((element) => {
+          element.classList.toggle("is-hidden", isBenchmark);
+        });
+        if (submitButton) {
+          submitButton.textContent = isBenchmark ? "Run Benchmark" : "Run Model";
+        }
+      }
+
+      function updateRecentRunsUI() {
+        if (!recentRunsCard) {
+          return;
+        }
+
+        const recentRuns = getRecentRuns();
+        const interactiveRun = recentRuns.interactive;
+        const benchmarkRun = recentRuns.benchmark;
+
+        if (interactiveRun?.url && recentInteractiveLink && recentInteractiveLabel) {
+          recentInteractiveLink.href = interactiveRun.url;
+          recentInteractiveLink.classList.remove("is-disabled");
+          recentInteractiveLabel.textContent = interactiveRun.label || "Saved run";
+        } else if (recentInteractiveLink && recentInteractiveLabel) {
+          recentInteractiveLink.removeAttribute("href");
+          recentInteractiveLink.classList.add("is-disabled");
+          recentInteractiveLabel.textContent = "None yet";
+        }
+
+        if (benchmarkRun?.url && recentBenchmarkLink && recentBenchmarkLabel) {
+          recentBenchmarkLink.href = benchmarkRun.url;
+          recentBenchmarkLink.classList.remove("is-disabled");
+          recentBenchmarkLabel.textContent = benchmarkRun.label || "Saved run";
+        } else if (recentBenchmarkLink && recentBenchmarkLabel) {
+          recentBenchmarkLink.removeAttribute("href");
+          recentBenchmarkLink.classList.add("is-disabled");
+          recentBenchmarkLabel.textContent = "None yet";
+        }
+
+        const hasAnyRun = Boolean(interactiveRun?.url || benchmarkRun?.url);
+        recentRunsCard.classList.toggle("is-hidden", !hasAnyRun);
+      }
+
+      function rememberCurrentRun() {
+        const currentMode = appShell?.dataset.currentRunMode;
+        const currentLabel = appShell?.dataset.currentRunLabel;
+        if (!currentMode || !currentLabel) {
+          return;
+        }
+
+        const recentRuns = getRecentRuns();
+        recentRuns[currentMode] = {
+          url: window.location.pathname,
+          label: currentLabel,
+        };
+        setRecentRuns(recentRuns);
+      }
+
+      function renderProgress(progress) {
+        if (!loadingCard) {
+          return;
+        }
+
+        const isBenchmark = progress.total_steps > 1 && modeSelect?.value === "benchmark";
+        if (loadingTitle) {
+          loadingTitle.textContent = isBenchmark ? "Running benchmark" : "Running models";
+        }
+        if (loadingMessage) {
+          loadingMessage.textContent = progress.current_message || "Loading...";
+        }
+        if (progressBar) {
+          progressBar.style.width = `${progress.progress_pct}%`;
+        }
+        if (progressPercent) {
+          progressPercent.textContent = `${progress.progress_pct}%`;
+        }
+        if (progressSteps) {
+          progressSteps.textContent = `${progress.completed_steps} / ${progress.total_steps} steps`;
+        }
+        if (progressElapsed) {
+          progressElapsed.textContent = `Elapsed: ${formatElapsed(progress.elapsed_seconds || 0)}`;
+        }
+        if (progressEta) {
+          if (progress.estimated_end) {
+            const etaText = progress.eta_seconds
+              ? `Est. end: ${progress.estimated_end} (${formatElapsed(progress.eta_seconds)} left)`
+              : `Est. end: ${progress.estimated_end}`;
+            progressEta.textContent = etaText;
+          } else {
+            progressEta.textContent = "Est. end: calculating…";
+          }
+        }
+        if (progressModel) {
+          progressModel.textContent = progress.current_model_label || "Waiting for model…";
+        }
+        if (progressSample) {
+          progressSample.textContent = progress.current_sample_label || "Waiting for image…";
+        }
+      }
+
+      function formatElapsed(totalSeconds) {
+        const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+        const hours = Math.floor(safeSeconds / 3600);
+        const minutes = Math.floor((safeSeconds % 3600) / 60);
+        const seconds = safeSeconds % 60;
+
+        return [hours, minutes, seconds]
+          .map((value) => String(value).padStart(2, "0"))
+          .join(":");
+      }
+
+      function scrollToLoadingCard() {
+        const target = loadingCard || document.body;
+        target.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+
+      async function pollJob() {
+        if (!loadingCard) {
+          return;
+        }
+
+        const statusUrl = loadingCard.dataset.statusUrl;
+        const redirectUrl = loadingCard.dataset.redirectUrl;
+        if (!statusUrl || !redirectUrl) {
+          return;
+        }
+
+        const response = await fetch(statusUrl, {
+          headers: { "X-Requested-With": "fetch" },
+        });
+        if (!response.ok) {
+          window.location.reload();
+          return;
+        }
+
+        const progress = await response.json();
+        renderProgress(progress);
+        if (progress.status === "completed" || progress.status === "failed") {
+          window.location.assign(redirectUrl);
+          return;
+        }
+
+        window.setTimeout(pollJob, 500);
+      }
+
+      addCheckpointButton?.addEventListener("click", () => {
+        const fragment = checkpointTemplate.content.cloneNode(true);
+        checkpointList.appendChild(fragment);
+        updateCheckpointLabels();
+        rebuildCheckpointOptions();
+      });
+
+      checkpointList?.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || !target.classList.contains("remove-checkpoint")) {
+          return;
+        }
+
+        const row = target.closest(".checkpoint-row");
+        if (!row || checkpointList.children.length === 1) {
+          return;
+        }
+
+        row.remove();
+        updateCheckpointLabels();
+        rebuildCheckpointOptions();
+      });
+
+      toggleSampleFavoriteButton?.addEventListener("click", () => {
+        if (!sampleSelect || sampleSelect.value === "") {
+          return;
+        }
+
+        const favorites = getFavoriteSamples();
+        const selectedValue = sampleSelect.value;
+        const nextFavorites = favorites.includes(selectedValue)
+          ? favorites.filter((value) => value !== selectedValue)
+          : [selectedValue, ...favorites.filter((value) => value !== selectedValue)];
+
+        setFavoriteSamples(nextFavorites);
+        renderSampleOptions();
+      });
+
+      sampleSelect?.addEventListener("change", () => {
+        updateFavoriteButtonState();
+      });
+
+      modeSelect?.addEventListener("change", () => {
+        updateModeVisibility();
+      });
+
+      runForm?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        submitButton?.setAttribute("disabled", "disabled");
+        window.setTimeout(scrollToLoadingCard, 0);
+
+        try {
+          const response = await fetch(runForm.action, {
+            method: "POST",
+            body: new FormData(runForm),
+            headers: { "X-Requested-With": "fetch" },
+          });
+
+          if (!response.ok) {
+            window.location.reload();
+            return;
+          }
+
+          const payload = await response.json();
+          window.location.assign(payload.redirect_url);
+        } catch {
+          window.location.reload();
+        }
+      });
+
+      checkpointList?.addEventListener("change", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLSelectElement) || target.name !== "checkpoint_paths") {
+          return;
+        }
+
+        rebuildCheckpointOptions();
+      });
+
+      updateCheckpointLabels();
+      rebuildCheckpointOptions();
+      renderSampleOptions();
+      updateModeVisibility();
+      rememberCurrentRun();
+      updateRecentRunsUI();
+      if (loadingCard) {
+        scrollToLoadingCard();
+        pollJob();
+      }
+    </script>
   </body>
 </html>
